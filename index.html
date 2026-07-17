@@ -1,0 +1,607 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Flarity Pay — Verifiable Cross-Chain Payments</title>
+    <!-- Google Fonts: Plus Jakarta Sans & Outfit -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800;900&family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <!-- Remix Icon for modern UI icons -->
+    <link href="https://cdn.jsdelivr.net/npm/remixicon@4.2.0/fonts/remixicon.css" rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
+</head>
+<body class="dark-theme">
+    <!-- Ambient background animations -->
+    <div class="radial-glow glow-1"></div>
+    <div class="radial-glow glow-2"></div>
+    <div class="grid-overlay"></div>
+    
+    <!-- Top Global Network Status Bar -->
+    <div class="network-status-bar">
+        <div class="status-left">
+            <span class="pulse-dot"></span>
+            <span class="network-badge">Coston2 Testnet</span>
+            <span class="rpc-status-pill" id="rpc-status"><i class="ri-wifi-line"></i> Connected</span>
+        </div>
+        <div class="status-right">
+            <div class="status-item">
+                <i class="ri-checkbox-circle-line text-orange"></i>
+                <span>FTSOv2: <strong class="glow-text-green">Active</strong></span>
+            </div>
+            <div class="status-item">
+                <i class="ri-node-tree text-orange"></i>
+                <span>FDC Engine: <strong class="glow-text-green">Consensus (50%+)</strong></span>
+            </div>
+            <div class="status-item">
+                <i class="ri-instance-line"></i>
+                <span>Block: <span id="current-block-height">Loading...</span></span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Premium Header Area -->
+    <header class="main-header">
+        <div class="logo-container">
+            <!-- Sleek SVG Logo representing overlapping credit cards and cross-chain signal pulses -->
+            <svg class="logo-svg" width="40" height="40" viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <rect x="4" y="10" width="26" height="18" rx="4" fill="url(#logo-grad-1)" fill-opacity="0.8" stroke="rgba(255,255,255,0.1)" stroke-width="1.5"/>
+                <rect x="10" y="14" width="26" height="18" rx="4" fill="url(#logo-grad-2)" stroke="rgba(255,255,255,0.2)" stroke-width="1.5"/>
+                <!-- Wireless Signal / Cross-chain pulse -->
+                <path d="M22 6C25.5 6 28.5 7.5 30.5 10" stroke="#ff761c" stroke-width="2" stroke-linecap="round"/>
+                <path d="M24 10C26 10 27.5 11 28.5 12.5" stroke="#ff5e3a" stroke-width="2" stroke-linecap="round"/>
+                <circle cx="26" cy="14" r="2.5" fill="#ff761c"/>
+                <defs>
+                    <linearGradient id="logo-grad-1" x1="4" y1="10" x2="30" y2="28" gradientUnits="userSpaceOnUse">
+                        <stop stop-color="#1e293b"/>
+                        <stop offset="1" stop-color="#0f172a"/>
+                    </linearGradient>
+                    <linearGradient id="logo-grad-2" x1="10" y1="14" x2="36" y2="32" gradientUnits="userSpaceOnUse">
+                        <stop stop-color="#ff761c"/>
+                        <stop offset="1" stop-color="#e0234a"/>
+                    </linearGradient>
+                </defs>
+            </svg>
+            <div class="logo-text">
+                Flarity <span class="logo-sub">Pay</span>
+                <span class="tag-version">Beta Gateway</span>
+            </div>
+        </div>
+
+        <nav class="main-navigation">
+            <button class="nav-tab active" data-target="storefront-tab">
+                <i class="ri-shopping-bag-3-line"></i> Storefront
+            </button>
+            <button class="nav-tab" data-target="dashboard-tab">
+                <i class="ri-bank-card-line"></i> Merchant Portal
+            </button>
+            <button class="nav-tab" data-target="visualizer-tab" id="nav-visualizer-btn">
+                <i class="ri-terminal-window-line"></i> Protocol Terminal
+                <span class="pulse-badge" id="pending-tx-badge" style="display:none;"></span>
+            </button>
+        </nav>
+    </header>
+
+    <!-- Main Container -->
+    <main class="main-content">
+        
+        <!-- ================= 1. STOREFRONT VIEW ================= -->
+        <section id="storefront-tab" class="tab-content active">
+            <div class="storefront-grid-layout">
+                <!-- Products Side -->
+                <div class="storefront-showcase">
+                    <div class="showcase-header">
+                        <h1 class="gradient-title">Exclusive Hardware & Infrastructure</h1>
+                        <p class="subtitle">Deploy verified FAssets and pay seamlessly using non-EVM assets verified on-chain via Flare's FDC.</p>
+                    </div>
+
+                    <div class="products-flex-grid">
+                        <!-- Card 1 -->
+                        <div class="premium-product-card" data-id="p1" data-name="Flarity Ledger Vault" data-price="149.00">
+                            <div class="card-image-box">
+                                <img src="images/wallet.jpg" alt="Flarity Ledger Vault">
+                                <span class="badge-feature">TEE Hardware</span>
+                            </div>
+                            <div class="card-details">
+                                <h3 class="product-title">Flarity Ledger Vault</h3>
+                                <p class="product-desc">Advanced hardware credential vault secured by off-chain Trusted Execution Environment keys.</p>
+                                <div class="card-pricing-footer">
+                                    <span class="product-price">$149.00</span>
+                                    <button class="btn btn-glow btn-add-cart">
+                                        <i class="ri-shopping-cart-2-line"></i> Add
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Card 2 -->
+                        <div class="premium-product-card" data-id="p2" data-name="Cyberpunk Mechanical Keyboard" data-price="89.00">
+                            <div class="card-image-box">
+                                <img src="images/keyboard.jpg" alt="Cyberpunk Mechanical Keyboard">
+                                <span class="badge-feature">Mechanical</span>
+                            </div>
+                            <div class="card-details">
+                                <h3 class="product-title">Cyberpunk Mechanical Keyboard</h3>
+                                <p class="product-desc">Tactile keyboard with glowing custom keys, obsidian build, and responsive switches.</p>
+                                <div class="card-pricing-footer">
+                                    <span class="product-price">$89.00</span>
+                                    <button class="btn btn-glow btn-add-cart">
+                                        <i class="ri-shopping-cart-2-line"></i> Add
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Card 3 -->
+                        <div class="premium-product-card" data-id="p3" data-name="Flarity Core Workstation" data-price="1299.00">
+                            <div class="card-image-box">
+                                <img src="images/workstation.jpg" alt="Flarity Core Workstation">
+                                <span class="badge-feature">Pro Developer</span>
+                            </div>
+                            <div class="card-details">
+                                <h3 class="product-title">Flarity Core Workstation</h3>
+                                <p class="product-desc">Ergonomic workstation featuring curved glass screen monitor, desk and ambient LED lighting.</p>
+                                <div class="card-pricing-footer">
+                                    <span class="product-price">$1,299.00</span>
+                                    <button class="btn btn-glow btn-add-cart">
+                                        <i class="ri-shopping-cart-2-line"></i> Add
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Basket Side (Checkout Terminal) -->
+                <aside class="checkout-basket-card glass-panel">
+                    <div class="basket-header">
+                        <h2><i class="ri-shopping-bag-line text-orange"></i> Your Order</h2>
+                        <span class="badge-count" id="cart-count">0 items</span>
+                    </div>
+                    <div class="basket-items-scrolling" id="cart-items-list">
+                        <div class="basket-empty-state">
+                            <i class="ri-shopping-basket-2-line"></i>
+                            <p>Your shopping basket is empty</p>
+                        </div>
+                    </div>
+                    <div class="basket-totals-footer">
+                        <div class="basket-subtotal-row">
+                            <span>Subtotal:</span>
+                            <span class="subtotal-val" id="cart-total">$0.00</span>
+                        </div>
+                        <button class="btn btn-payment btn-block" id="btn-checkout" disabled>
+                            <i class="ri-arrow-right-line"></i> Proceed to Payment
+                        </button>
+                        <div class="merchant-badge">
+                            <i class="ri-shield-check-line text-green"></i> <span>Secured by FTSOv2 & FDC</span>
+                        </div>
+                    </div>
+                </aside>
+            </div>
+        </section>
+
+        <!-- ================= 2. MERCHANT PORTAL VIEW ================= -->
+        <section id="dashboard-tab" class="tab-content">
+            <div class="merchant-dashboard-layout">
+                <!-- Overview Stats Row -->
+                <div class="metrics-grid">
+                    <div class="metric-card glass-panel">
+                        <div class="metric-visual bg-orange-glow"><i class="ri-wallet-3-line"></i></div>
+                        <div class="metric-info">
+                            <span class="metric-label">TOTAL SALES (USD)</span>
+                            <h2 class="metric-value" id="merchant-revenue">$1,438.00</h2>
+                            <span class="metric-trend text-green"><i class="ri-line-chart-line"></i> +12.5% this month</span>
+                        </div>
+                    </div>
+                    
+                    <div class="metric-card glass-panel">
+                        <div class="metric-visual bg-blue-glow"><i class="ri-coins-line"></i></div>
+                        <div class="metric-info">
+                            <span class="metric-label">wrapped fassets holdings</span>
+                            <div class="holdings-grid">
+                                <div class="holding-pill">
+                                    <span class="holding-coin xrp-bg">XRP</span>
+                                    <span class="holding-amount" id="bal-fxrp">2,100</span>
+                                </div>
+                                <div class="holding-pill">
+                                    <span class="holding-coin btc-bg">BTC</span>
+                                    <span class="holding-amount" id="bal-fbtc">0.045</span>
+                                </div>
+                                <div class="holding-pill">
+                                    <span class="holding-coin doge-bg">DOGE</span>
+                                    <span class="holding-amount" id="bal-fdoge">8,500</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="metric-card glass-panel">
+                        <div class="metric-visual bg-green-glow"><i class="ri-hand-coin-line"></i></div>
+                        <div class="metric-info">
+                            <span class="metric-label">FTSO Delegation Stats</span>
+                            <h2 class="metric-value">9.64% <small>APR</small></h2>
+                            <span class="metric-trend text-green"><i class="ri-percent-line"></i> <strong id="delegated-amount">15,000 WFLR</strong> Active</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="dashboard-split-columns">
+                    <!-- Left Ops Column -->
+                    <div class="dashboard-left-ops">
+                        
+                        <!-- Coston2 Live Price Panel -->
+                        <div class="glass-panel oracle-prices-panel">
+                            <div class="panel-header-row">
+                                <h3><span class="live-pulse"></span> FTSOv2 Real-Time Feeds</h3>
+                                <span class="tag-coston">Block-Latency</span>
+                            </div>
+                            <p class="panel-desc">Direct on-chain price streams pulled every 1.8 seconds.</p>
+                            
+                            <div class="price-cards-vertical">
+                                <div class="price-feed-card" id="feed-FLR">
+                                    <div class="feed-left">
+                                        <div class="coin-icon flr-bg">FLR</div>
+                                        <div>
+                                            <span class="coin-symbol">FLR/USD</span>
+                                            <span class="coin-name">Native Flare</span>
+                                        </div>
+                                    </div>
+                                    <div class="feed-right">
+                                        <span class="price-digits" id="price-FLR">$0.0182</span>
+                                        <span class="time-status" id="time-FLR">1.8s ago</span>
+                                    </div>
+                                </div>
+
+                                <div class="price-feed-card" id="feed-XRP">
+                                    <div class="feed-left">
+                                        <div class="coin-icon xrp-bg">XRP</div>
+                                        <div>
+                                            <span class="coin-symbol">XRP/USD</span>
+                                            <span class="coin-name">Ripple</span>
+                                        </div>
+                                    </div>
+                                    <div class="feed-right">
+                                        <span class="price-digits" id="price-XRP">$0.5840</span>
+                                        <span class="time-status" id="time-XRP">1.8s ago</span>
+                                    </div>
+                                </div>
+
+                                <div class="price-feed-card" id="feed-BTC">
+                                    <div class="feed-left">
+                                        <div class="coin-icon btc-bg">BTC</div>
+                                        <div>
+                                            <span class="coin-symbol">BTC/USD</span>
+                                            <span class="coin-name">Bitcoin</span>
+                                        </div>
+                                    </div>
+                                    <div class="feed-right">
+                                        <span class="price-digits" id="price-BTC">$58,240.00</span>
+                                        <span class="time-status" id="time-BTC">1.8s ago</span>
+                                    </div>
+                                </div>
+
+                                <div class="price-feed-card" id="feed-DOGE">
+                                    <div class="feed-left">
+                                        <div class="coin-icon doge-bg">DOGE</div>
+                                        <div>
+                                            <span class="coin-symbol">DOGE/USD</span>
+                                            <span class="coin-name">Dogecoin</span>
+                                        </div>
+                                    </div>
+                                    <div class="feed-right">
+                                        <span class="price-digits" id="price-DOGE">$0.1140</span>
+                                        <span class="time-status" id="time-DOGE">1.8s ago</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- On-Chain Wrapping operations -->
+                        <div class="glass-panel wrapper-widget-panel">
+                            <h3><i class="ri-swap-box-line text-orange"></i> Native FLR Asset Wrapping</h3>
+                            <p class="panel-desc">Wrap FLR to WFLR to participate in FTSO price delegation.</p>
+                            
+                            <div class="balances-split-row">
+                                <div class="bal-box">
+                                    <span>FLR Available</span>
+                                    <strong id="merchant-flr-balance">4,521.80</strong>
+                                </div>
+                                <div class="bal-box">
+                                    <span>WFLR (Wrapped)</span>
+                                    <strong id="merchant-wflr-balance">15,000.00</strong>
+                                </div>
+                            </div>
+
+                            <div class="wrapping-form-box">
+                                <div class="form-inputs-row">
+                                    <input type="number" id="wrap-amount" placeholder="Amount to wrap/unwrap">
+                                    <select id="wrap-type">
+                                        <option value="wrap">Wrap (FLR → WFLR)</option>
+                                        <option value="unwrap">Unwrap (WFLR → FLR)</option>
+                                    </select>
+                                </div>
+                                <button class="btn btn-secondary btn-block" id="btn-wrap-action">Execute Wrapping Transaction</button>
+                            </div>
+                        </div>
+
+                    </div>
+
+                    <!-- Right Ledger Column -->
+                    <div class="dashboard-right-ledger glass-panel">
+                        <div class="ledger-header-row">
+                            <h3><i class="ri-receipt-line text-orange"></i> Settlement Registry</h3>
+                            <button class="btn btn-sm" id="btn-refresh-ledger"><i class="ri-loop-left-line"></i> Refresh</button>
+                        </div>
+                        <p class="panel-desc">Audit trail of cross-chain FAssets verified and settled on Flare.</p>
+                        
+                        <div class="ledger-table-wrapper">
+                            <table class="settlement-table">
+                                <thead>
+                                    <tr>
+                                        <th>Order ID</th>
+                                        <th>Settled Value</th>
+                                        <th>FAssets Minted</th>
+                                        <th>Source Chain</th>
+                                        <th>FDC Attestation</th>
+                                        <th>Timestamp</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="ledger-body">
+                                    <!-- Dynamic rows loaded by app.js -->
+                                    <tr>
+                                        <td>#8024</td>
+                                        <td>255.13 XRP</td>
+                                        <td>254.87 FXRP</td>
+                                        <td><span class="source-badge badge-xrp">XRPL</span></td>
+                                        <td><span class="status-pill status-verified"><i class="ri-checkbox-circle-fill"></i> Verified</span></td>
+                                        <td>10 mins ago</td>
+                                    </tr>
+                                    <tr>
+                                        <td>#8023</td>
+                                        <td>780.70 DOGE</td>
+                                        <td>779.92 FDOGE</td>
+                                        <td><span class="source-badge badge-doge">Dogecoin</span></td>
+                                        <td><span class="status-pill status-verified"><i class="ri-checkbox-circle-fill"></i> Verified</span></td>
+                                        <td>1 hour ago</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- ================= 3. PROTOCOL TERMINAL VIEW ================= -->
+        <section id="visualizer-tab" class="tab-content">
+            <div class="protocol-terminal-layout">
+                <!-- Left: Wallet Simulator -->
+                <div class="terminal-left-wallet glass-panel">
+                    <h3><i class="ri-wallet-line text-orange"></i> Shopper Wallet Terminal</h3>
+                    <p class="panel-desc">Simulate external chain transaction signing & broadcasting.</p>
+                    
+                    <div class="wallet-assets-scroller">
+                        <div class="wallet-asset-pill active" data-asset="XRP">
+                            <div class="asset-logo xrp-bg">X</div>
+                            <div class="asset-info">
+                                <span class="asset-ticker">XRP</span>
+                                <span class="asset-amount" id="wallet-bal-xrp">12,500.00 XRP</span>
+                            </div>
+                        </div>
+                        <div class="wallet-asset-pill" data-asset="BTC">
+                            <div class="asset-logo btc-bg">B</div>
+                            <div class="asset-info">
+                                <span class="asset-ticker">BTC</span>
+                                <span class="asset-amount" id="wallet-bal-btc">1.4850 BTC</span>
+                            </div>
+                        </div>
+                        <div class="wallet-asset-pill" data-asset="DOGE">
+                            <div class="asset-logo doge-bg">D</div>
+                            <div class="asset-info">
+                                <span class="asset-ticker">DOGE</span>
+                                <span class="asset-amount" id="wallet-bal-doge">42,000.00 DOGE</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="wallet-invoice-card">
+                        <div class="invoice-tag">gateway invoice</div>
+                        <div class="invoice-rows">
+                            <div class="invoice-row">
+                                <span class="label">Destination Bridge:</span>
+                                <code id="wallet-dest-addr">Waiting for checkout...</code>
+                            </div>
+                            <div class="invoice-row">
+                                <span class="label">FDC Payment Reference:</span>
+                                <code id="wallet-pay-ref">0x0000000000...</code>
+                            </div>
+                            <div class="invoice-row">
+                                <span class="label">Total Amount Due:</span>
+                                <span class="invoice-price" id="wallet-amount-due">0.00</span>
+                            </div>
+                        </div>
+                        <button class="btn btn-payment btn-block" id="btn-broadcast-tx" disabled>
+                            <i class="ri-radar-line"></i> Broadcast Transaction
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Right: FDC Pipeline Engine -->
+                <div class="terminal-right-engine glass-panel">
+                    <h3><i class="ri-settings-5-line text-orange"></i> Flare Data Connector (FDC) Processing Engine</h3>
+                    <p class="panel-desc">Watch validators reach consensus, verify the payment, and mint FAssets on-chain.</p>
+                    
+                    <div class="fdc-pipeline-steps">
+                        <!-- Step 1 -->
+                        <div class="pipeline-step" id="step-broadcast">
+                            <div class="pipeline-circle">1</div>
+                            <div class="pipeline-card">
+                                <h4>API Request & Transaction Detection</h4>
+                                <p>Scanning external chain for transaction hash, reference match, and value verification.</p>
+                                <div class="pipeline-console" id="fdc-data-request">Awaiting transaction broadcast...</div>
+                            </div>
+                        </div>
+
+                        <!-- Step 2 -->
+                        <div class="pipeline-step" id="step-voting">
+                            <div class="pipeline-circle">2</div>
+                            <div class="pipeline-card">
+                                <h4>Data Provider Bitvoting (Consensus)</h4>
+                                <p>Flare's decentralized entities independently verify and sign the payment event.</p>
+                                <div class="validator-grid" id="providers-votes">
+                                    <span class="validator-node" data-id="1">Node 1</span>
+                                    <span class="validator-node" data-id="2">Node 2</span>
+                                    <span class="validator-node" data-id="3">Node 3</span>
+                                    <span class="validator-node" data-id="4">Node 4</span>
+                                    <span class="validator-node" data-id="5">Node 5</span>
+                                    <span class="validator-node" data-id="6">Node 6</span>
+                                    <span class="validator-node" data-id="7">Node 7</span>
+                                    <span class="validator-node" data-id="8">Node 8</span>
+                                    <span class="validator-node" data-id="9">Node 9</span>
+                                    <span class="validator-node" data-id="10">Node 10</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Step 3 -->
+                        <div class="pipeline-step" id="step-merkle">
+                            <div class="pipeline-circle">3</div>
+                            <div class="pipeline-card">
+                                <h4>Merkle Tree Consensus Assembly</h4>
+                                <p>Attestations are hashed and packed into a Merkle root to minimize on-chain footprint.</p>
+                                
+                                <div class="tree-visualizer-box" id="merkle-tree-box">
+                                    <div class="tree-line-wrapper">
+                                        <svg class="tree-svg-lines" width="100%" height="80">
+                                            <!-- SVG Lines connecting the Merkle tree visually -->
+                                            <line x1="50%" y1="10" x2="25%" y2="50" stroke="rgba(255,255,255,0.06)" stroke-width="1.5" id="line-left"/>
+                                            <line x1="50%" y1="10" x2="75%" y2="50" stroke="rgba(255,255,255,0.06)" stroke-width="1.5" id="line-right"/>
+                                        </svg>
+                                        <div class="tree-node node-root" id="merkle-root">Merkle Root</div>
+                                        <div class="tree-leaves-row">
+                                            <div class="tree-node node-leaf" id="merkle-left">H(Leaf A)</div>
+                                            <div class="tree-node node-leaf" id="merkle-right">H(Invoice Tx)</div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Step 4 -->
+                        <div class="pipeline-step" id="step-mint">
+                            <div class="pipeline-circle">4</div>
+                            <div class="pipeline-card">
+                                <h4>IRelay Root Submission & FAssets Minting</h4>
+                                <p>On-chain verify of Merkle proof. Smart account is credited with wrapped tokens.</p>
+                                <div class="pipeline-console text-green" id="fdc-data-proof">Awaiting verification...</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <!-- ================= PREMIUM CHECKOUT MODAL OVERLAY ================= -->
+    <div class="modal-overlay" id="checkout-modal">
+        <div class="stripe-checkout-modal glass-panel animated-scale-in">
+            <button class="modal-dismiss" id="btn-close-modal"><i class="ri-close-line"></i></button>
+            
+            <div class="stripe-split-layout">
+                <!-- Left: Order Breakdown -->
+                <div class="stripe-breakdown">
+                    <div class="stripe-merchant-meta">
+                        <span class="merchant-badge-active">Merchant Invoice</span>
+                        <h4 class="merchant-name">Flarity Pay Gateway</h4>
+                    </div>
+                    
+                    <div class="order-summary-box">
+                        <div class="product-summary-row">
+                            <span id="modal-item-list">Product Summary</span>
+                            <span class="product-qty">x 1</span>
+                        </div>
+                        <h1 class="total-usd-label" id="modal-usd-total">$149.00</h1>
+                    </div>
+
+                    <div class="receipt-rows">
+                        <div class="receipt-row">
+                            <span>Gateway Mint Fee (0.1%)</span>
+                            <span id="modal-mint-fee">0.00 XRP</span>
+                        </div>
+                        <div class="receipt-row total-calc-highlight">
+                            <span>Total Due</span>
+                            <strong id="modal-crypto-total">0.00 XRP</strong>
+                        </div>
+                    </div>
+                    
+                    <div class="stripe-footer-terms">
+                        <p>Powered by the Flare Systems Protocol. FAssets are trustless representations of underlying blockchain assets on Flare's EVM.</p>
+                    </div>
+                </div>
+
+                <!-- Right: Payment Execution -->
+                <div class="stripe-execution">
+                    <h3>Select Payment Method</h3>
+                    
+                    <div class="asset-selector-grid">
+                        <button class="asset-selector-card active" data-currency="XRP">
+                            <span class="asset-badge xrp-bg">XRP</span>
+                            <div class="asset-meta">
+                                <span class="asset-label">Ripple</span>
+                                <span class="asset-conversion-rate" id="rate-XRP">1 XRP = $0.58</span>
+                            </div>
+                        </button>
+                        <button class="asset-selector-card" data-currency="BTC">
+                            <span class="asset-badge btc-bg">BTC</span>
+                            <div class="asset-meta">
+                                <span class="asset-label">Bitcoin</span>
+                                <span class="asset-conversion-rate" id="rate-BTC">1 BTC = $58.2k</span>
+                            </div>
+                        </button>
+                        <button class="asset-selector-card" data-currency="DOGE">
+                            <span class="asset-badge doge-bg">DOGE</span>
+                            <div class="asset-meta">
+                                <span class="asset-label">Dogecoin</span>
+                                <span class="asset-conversion-rate" id="rate-DOGE">1 DOGE = $0.11</span>
+                            </div>
+                        </button>
+                    </div>
+
+                    <div class="qr-address-details-box">
+                        <div class="qr-code-wrapper">
+                            <div class="qr-visual-box" id="qr-code-box">
+                                <i class="ri-qr-code-fill"></i>
+                            </div>
+                        </div>
+                        <div class="clipboard-box">
+                            <div class="clipboard-row">
+                                <span class="clipboard-label">Merchant Bridge Address:</span>
+                                <div class="code-copy-group">
+                                    <code id="merchant-destination-address">Loading...</code>
+                                    <button class="btn-icon-copy" id="btn-copy-address"><i class="ri-file-copy-line"></i></button>
+                                </div>
+                            </div>
+                            <div class="clipboard-row">
+                                <span class="clipboard-label">FDC Payment Reference (Required):</span>
+                                <div class="code-copy-group">
+                                    <code id="payment-reference-hex">0x00000000...</code>
+                                    <button class="btn-icon-copy" id="btn-copy-ref"><i class="ri-file-copy-line"></i></button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <button class="btn btn-payment btn-block" id="btn-modal-pay-simulate">
+                        <i class="ri-arrow-right-up-line"></i> Open Wallet & Pay Invoice
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Scripts -->
+    <script src="https://cdn.jsdelivr.net/npm/ethers@5.7.2/dist/ethers.umd.min.js"></script>
+    <script src="app.js"></script>
+</body>
+</html>
