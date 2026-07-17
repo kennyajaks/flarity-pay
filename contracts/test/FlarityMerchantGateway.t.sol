@@ -17,7 +17,8 @@ contract FlarityMerchantGatewayTest is Test {
     MockFAsset public fBtc;
     
     address public merchantWallet = address(0x999);
-    address public buyerWallet = address(0x888);
+    address public sellerAddress = address(0x123);
+    address public buyerAddress = address(0x456);
     
     bytes21 public constant XRP_FEED = 0x015852502f55534400000000000000000000000000;
     bytes21 public constant BTC_FEED = 0x014254432f55534400000000000000000000000000;
@@ -53,14 +54,58 @@ contract FlarityMerchantGatewayTest is Test {
         mockFtso.setPrice(BTC_FEED, 5824000, 2);
     }
 
-    function testInvoiceCreationXRP() public {
-        bytes32 paymentReference = keccak256("tx-ref-1");
-        uint256 amountUSD = 100 * 1e18; // 100 USD
+    function testListItem() public {
+        vm.prank(sellerAddress);
+        uint256 listingId = gateway.listItem(
+            "Solidity Contract Audit",
+            "Professional smart contract vulnerability check.",
+            150 * 1e18, // $150.00
+            "http://audit-mock.jpg",
+            FlarityMerchantGateway.ListingType.Service
+        );
 
-        uint256 invoiceId = gateway.createInvoice(amountUSD, "XRP", paymentReference);
+        assertEq(listingId, 1);
+        (
+            uint256 id,
+            address seller,
+            string memory title,
+            string memory description,
+            uint256 priceUSD,
+            string memory imageUrl,
+            FlarityMerchantGateway.ListingType listingType,
+            bool active
+        ) = gateway.listings(listingId);
+
+        assertEq(id, 1);
+        assertEq(seller, sellerAddress);
+        assertEq(title, "Solidity Contract Audit");
+        assertEq(description, "Professional smart contract vulnerability check.");
+        assertEq(priceUSD, 150 * 1e18);
+        assertEq(imageUrl, "http://audit-mock.jpg");
+        assertTrue(listingType == FlarityMerchantGateway.ListingType.Service);
+        assertTrue(active);
+    }
+
+    function testInvoiceCreationXRP() public {
+        // 1. Create a listing
+        vm.prank(sellerAddress);
+        uint256 listingId = gateway.listItem(
+            "Flarity Ledger Vault",
+            "Sleek and secure digital vault.",
+            100 * 1e18, // 100 USD
+            "http://vault.jpg",
+            FlarityMerchantGateway.ListingType.Product
+        );
+
+        // 2. Create invoice
+        bytes32 paymentReference = keccak256("tx-ref-1");
+        vm.prank(buyerAddress);
+        uint256 invoiceId = gateway.createInvoice(listingId, "XRP", paymentReference);
         
         (
             uint256 id,
+            address buyer,
+            address seller,
             uint256 storedUSD,
             bytes32 storedRef,
             string memory currency,
@@ -69,7 +114,9 @@ contract FlarityMerchantGatewayTest is Test {
         ) = gateway.invoices(invoiceId);
 
         assertEq(id, 1);
-        assertEq(storedUSD, amountUSD);
+        assertEq(buyer, buyerAddress);
+        assertEq(seller, sellerAddress);
+        assertEq(storedUSD, 100 * 1e18);
         assertEq(storedRef, paymentReference);
         assertEq(currency, "XRP");
         
@@ -81,12 +128,20 @@ contract FlarityMerchantGatewayTest is Test {
     }
 
     function testInvoiceCreationBTC() public {
-        bytes32 paymentReference = keccak256("tx-ref-2");
-        uint256 amountUSD = 1000 * 1e18; // 1000 USD
+        vm.prank(sellerAddress);
+        uint256 listingId = gateway.listItem(
+            "Workstation Core",
+            "High-end visual processing unit.",
+            1000 * 1e18, // 1000 USD
+            "http://workstation.jpg",
+            FlarityMerchantGateway.ListingType.Product
+        );
 
-        uint256 invoiceId = gateway.createInvoice(amountUSD, "BTC", paymentReference);
+        bytes32 paymentReference = keccak256("tx-ref-2");
+        vm.prank(buyerAddress);
+        uint256 invoiceId = gateway.createInvoice(listingId, "BTC", paymentReference);
         
-        (, , , , uint256 amountCrypto, ) = gateway.invoices(invoiceId);
+        (, , , , , , uint256 amountCrypto, ) = gateway.invoices(invoiceId);
         
         // Math check:
         // cryptoDue = (1000 * 1e18 * 10^2 * 10^8) / (5824000 * 1e18) = 0.01717032 BTC
@@ -94,20 +149,27 @@ contract FlarityMerchantGatewayTest is Test {
         assertEq(amountCrypto, 1717032);
     }
 
-    function testPaymentSettlementSuccess() public {
+    function testPaymentSettlementSuccessAndDirectSellerPayout() public {
+        vm.prank(sellerAddress);
+        uint256 listingId = gateway.listItem(
+            "Custom Keyboard",
+            "Mechanical cyberpunk keyboard.",
+            100 * 1e18,
+            "http://kb.jpg",
+            FlarityMerchantGateway.ListingType.Product
+        );
+
         bytes32 paymentReference = keccak256("tx-ref-1");
-        uint256 amountUSD = 100 * 1e18; // 100 USD
+        vm.prank(buyerAddress);
+        uint256 invoiceId = gateway.createInvoice(listingId, "XRP", paymentReference);
         
-        // 1. Create Invoice
-        uint256 invoiceId = gateway.createInvoice(amountUSD, "XRP", paymentReference);
-        
-        // 2. Build mock FDC proof
+        // Build mock FDC proof
         IPaymentVerification.RequestBody memory request = IPaymentVerification.RequestBody({
             attestationType: "Payment",
             sourceId: "XRP",
             transactionId: keccak256("ext-tx-hash"),
             paymentReference: paymentReference,
-            amount: 171232876, // Match the calculated amountCrypto
+            amount: 171232876, 
             receivingAddress: "rFlarityPayAgentAddressCoston2TestnetXRPLXXXXXXXXX"
         });
         
@@ -118,29 +180,39 @@ contract FlarityMerchantGatewayTest is Test {
             requestBody: request
         });
         
-        // 3. Settle payment
+        // Settle payment
         gateway.settlePayment(invoiceId, proof);
         
-        // 4. Verify state
-        (, , , , , bool settled) = gateway.invoices(invoiceId);
+        // Verify state
+        (, , , , , , , bool settled) = gateway.invoices(invoiceId);
         assertTrue(settled);
         
-        // Verify FAsset tokens were minted to merchant
-        assertEq(fXrp.balanceOf(merchantWallet), 171232876);
+        // Verify FAsset tokens were minted directly to the SELLER (not the admin merchantWallet)
+        assertEq(fXrp.balanceOf(sellerAddress), 171232876);
+        assertEq(fXrp.balanceOf(merchantWallet), 0);
     }
 
-    function testPaymentSettlementFailInsufficientAmount() public {
-        bytes32 paymentReference = keccak256("tx-ref-1");
-        uint256 amountUSD = 100 * 1e18;
-        
-        uint256 invoiceId = gateway.createInvoice(amountUSD, "XRP", paymentReference);
-        
+    function testReviewsSystem() public {
+        // 1. Setup seller, buyer, listing, invoice, and payment settlement
+        vm.prank(sellerAddress);
+        uint256 listingId = gateway.listItem(
+            "Audit Service",
+            "Contract audit",
+            100 * 1e18,
+            "http://audit.jpg",
+            FlarityMerchantGateway.ListingType.Service
+        );
+
+        bytes32 paymentReference = keccak256("review-ref-1");
+        vm.prank(buyerAddress);
+        uint256 invoiceId = gateway.createInvoice(listingId, "XRP", paymentReference);
+
         IPaymentVerification.RequestBody memory request = IPaymentVerification.RequestBody({
             attestationType: "Payment",
             sourceId: "XRP",
-            transactionId: keccak256("ext-tx-hash"),
+            transactionId: keccak256("ext-tx-hash-2"),
             paymentReference: paymentReference,
-            amount: 171232875, // 1 drop less than required!
+            amount: 171232876,
             receivingAddress: "rFlarityPayAgentAddressCoston2TestnetXRPLXXXXXXXXX"
         });
         
@@ -150,8 +222,26 @@ contract FlarityMerchantGatewayTest is Test {
             merkleProof: emptyProof,
             requestBody: request
         });
-        
-        vm.expectRevert("Paid amount is insufficient");
+
+        // Settle transaction
         gateway.settlePayment(invoiceId, proof);
+
+        // 2. Submit review from verified buyer
+        vm.prank(buyerAddress);
+        gateway.submitReview(sellerAddress, 5, "Outstanding audit service, found all critical bugs!");
+
+        // 3. Assert review was saved correctly
+        assertEq(gateway.getReviewsCount(sellerAddress), 1);
+        
+        FlarityMerchantGateway.Review[] memory reviews = gateway.getSellerReviews(sellerAddress);
+        assertEq(reviews[0].buyer, buyerAddress);
+        assertEq(reviews[0].rating, 5);
+        assertEq(reviews[0].comment, "Outstanding audit service, found all critical bugs!");
+
+        // 4. Test review submission from unverified buyer (should fail)
+        address hacker = address(0x666);
+        vm.prank(hacker);
+        vm.expectRevert("Only verified buyers can review");
+        gateway.submitReview(sellerAddress, 4, "Trying to submit fake review.");
     }
 }

@@ -80,6 +80,9 @@
                 <i class="ri-terminal-window-line"></i> Protocol Terminal
                 <span class="pulse-badge" id="pending-tx-badge" style="display:none;"></span>
             </button>
+            <button class="nav-tab" data-target="seller-tab">
+                <i class="ri-user-star-line"></i> Seller Portal
+            </button>
         </nav>
     </header>
 
@@ -96,60 +99,14 @@
                         <p class="subtitle">Deploy verified FAssets and pay seamlessly using non-EVM assets verified on-chain via Flare's FDC.</p>
                     </div>
 
-                    <div class="products-flex-grid">
-                        <!-- Card 1 -->
-                        <div class="premium-product-card" data-id="p1" data-name="Flarity Ledger Vault" data-price="149.00">
-                            <div class="card-image-box">
-                                <img src="images/wallet.jpg" alt="Flarity Ledger Vault">
-                                <span class="badge-feature">TEE Hardware</span>
-                            </div>
-                            <div class="card-details">
-                                <h3 class="product-title">Flarity Ledger Vault</h3>
-                                <p class="product-desc">Advanced hardware credential vault secured by off-chain Trusted Execution Environment keys.</p>
-                                <div class="card-pricing-footer">
-                                    <span class="product-price">$149.00</span>
-                                    <button class="btn btn-glow btn-add-cart">
-                                        <i class="ri-shopping-cart-2-line"></i> Add
-                                    </button>
-                                </div>
-                            </div>
-                        </div>
+                    <div class="marketplace-filter-row">
+                        <button class="filter-btn active" data-filter="all">All Items</button>
+                        <button class="filter-btn" data-filter="Product"><i class="ri-instance-line"></i> Products</button>
+                        <button class="filter-btn" data-filter="Service"><i class="ri-tools-line"></i> Services</button>
+                    </div>
 
-                        <!-- Card 2 -->
-                        <div class="premium-product-card" data-id="p2" data-name="Cyberpunk Mechanical Keyboard" data-price="89.00">
-                            <div class="card-image-box">
-                                <img src="images/keyboard.jpg" alt="Cyberpunk Mechanical Keyboard">
-                                <span class="badge-feature">Mechanical</span>
-                            </div>
-                            <div class="card-details">
-                                <h3 class="product-title">Cyberpunk Mechanical Keyboard</h3>
-                                <p class="product-desc">Tactile keyboard with glowing custom keys, obsidian build, and responsive switches.</p>
-                                <div class="card-pricing-footer">
-                                    <span class="product-price">$89.00</span>
-                                    <button class="btn btn-glow btn-add-cart">
-                                        <i class="ri-shopping-cart-2-line"></i> Add
-                                    </button>
-                                </div>
-                            </div>
-                        </div>
-
-                        <!-- Card 3 -->
-                        <div class="premium-product-card" data-id="p3" data-name="Flarity Core Workstation" data-price="1299.00">
-                            <div class="card-image-box">
-                                <img src="images/workstation.jpg" alt="Flarity Core Workstation">
-                                <span class="badge-feature">Pro Developer</span>
-                            </div>
-                            <div class="card-details">
-                                <h3 class="product-title">Flarity Core Workstation</h3>
-                                <p class="product-desc">Ergonomic workstation featuring curved glass screen monitor, desk and ambient LED lighting.</p>
-                                <div class="card-pricing-footer">
-                                    <span class="product-price">$1,299.00</span>
-                                    <button class="btn btn-glow btn-add-cart">
-                                        <i class="ri-shopping-cart-2-line"></i> Add
-                                    </button>
-                                </div>
-                            </div>
-                        </div>
+                    <div class="products-flex-grid" id="marketplace-listings-grid">
+                        <!-- Loaded dynamically by app.js -->
                     </div>
                 </div>
 
@@ -497,6 +454,108 @@
                                 <div class="pipeline-console text-green" id="fdc-data-proof">Awaiting verification...</div>
                             </div>
                         </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+        
+        <!-- ================= 4. SELLER PORTAL & REVIEWS VIEW ================= -->
+        <section id="seller-tab" class="tab-content">
+            <div class="seller-portal-layout">
+                <!-- Left: List Product/Service Form -->
+                <div class="list-item-card glass-panel">
+                    <h3><i class="ri-add-box-line text-orange"></i> List a New Product or Service</h3>
+                    <p class="panel-desc">Join the decentralized marketplace. Describe your item, set a price in USD, and register it on the blockchain.</p>
+                    
+                    <form id="form-list-item" class="listing-form">
+                        <div class="form-group">
+                            <label for="list-title">Product/Service Title</label>
+                            <input type="text" id="list-title" placeholder="e.g. Solidity Contract Audit" required>
+                        </div>
+                        
+                        <div class="form-group-split">
+                            <div class="form-group">
+                                <label for="list-price">Price in USD ($)</label>
+                                <input type="number" id="list-price" step="0.01" min="0.10" placeholder="e.g. 150.00" required>
+                            </div>
+                            <div class="form-group">
+                                <label for="list-type">Listing Type</label>
+                                <select id="list-type">
+                                    <option value="Product">Product (Physical/Digital)</option>
+                                    <option value="Service">Service (Job/Contract)</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="list-description">Detailed Description</label>
+                            <textarea id="list-description" rows="3" placeholder="Describe what you are offering..." required></textarea>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="list-image">Image Mock URL (Optional)</label>
+                            <input type="text" id="list-image" placeholder="Leave empty for auto-generated Web3 abstract art...">
+                        </div>
+                        
+                        <button type="submit" class="btn btn-payment btn-block">
+                            <i class="ri-checkbox-circle-line"></i> Register Listing On-Chain
+                        </button>
+                    </form>
+                </div>
+
+                <!-- Right: Seller Reviews & Reputation -->
+                <div class="seller-reviews-card glass-panel">
+                    <div class="panel-header-row">
+                        <h3><i class="ri-star-line text-orange"></i> Flarity Stars & Reputation</h3>
+                        <div class="select-seller-wrapper">
+                            <label for="select-seller">Seller Profile: </label>
+                            <select id="select-seller">
+                                <option value="0x5336E1e04A1d5F69b86e057b7D05621cBcc645b0">Admin (Platform Store)</option>
+                                <option value="0x123f123456789012345678901234567890123456">Seller A (Audits)</option>
+                                <option value="0x987f654321098765432109876543210987654321">Seller B (Development)</option>
+                            </select>
+                        </div>
+                    </div>
+                    
+                    <div class="seller-rating-summary">
+                        <div class="stars-aggregate">
+                            <span class="average-stars-score" id="average-stars-val">5.0</span>
+                            <div class="stars-visual-row" id="average-stars-visual">
+                                <!-- Stars icons loaded dynamically -->
+                            </div>
+                        </div>
+                        <p class="panel-desc" id="reviews-count-label">Based on 0 verified purchases</p>
+                    </div>
+
+                    <hr class="receipt-divider">
+
+                    <!-- Reviews List -->
+                    <div class="seller-reviews-scroller" id="reviews-comments-list">
+                        <!-- Loaded dynamically by app.js -->
+                    </div>
+
+                    <!-- Leave a Review Form -->
+                    <div class="write-review-section">
+                        <h4>Submit a Review</h4>
+                        <p class="panel-desc">Only verified buyers who completed payments can rate this seller.</p>
+                        <form id="form-submit-review" class="review-form">
+                            <div class="form-group-split-rating">
+                                <div class="rating-stars-input" id="rating-stars-interactive">
+                                    <span class="star-interactive" data-val="1"><i class="ri-star-line"></i></span>
+                                    <span class="star-interactive" data-val="2"><i class="ri-star-line"></i></span>
+                                    <span class="star-interactive" data-val="3"><i class="ri-star-line"></i></span>
+                                    <span class="star-interactive" data-val="4"><i class="ri-star-line"></i></span>
+                                    <span class="star-interactive" data-val="5"><i class="ri-star-fill"></i></span>
+                                </div>
+                                <span class="selected-stars-text" id="selected-stars-text">5 Flarity Stars</span>
+                            </div>
+                            <div class="form-group">
+                                <textarea id="review-comment" rows="2" placeholder="Write your honest review here..." required></textarea>
+                            </div>
+                            <button type="submit" class="btn btn-secondary btn-sm" id="btn-submit-review">
+                                Submit Verified Review
+                            </button>
+                        </form>
                     </div>
                 </div>
             </div>

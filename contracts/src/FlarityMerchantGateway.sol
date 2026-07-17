@@ -7,13 +7,37 @@ import {MockFAsset} from "./MockFAsset.sol";
 
 /**
  * @title FlarityMerchantGateway
- * @notice Core smart contract for Flarity Pay.
+ * @notice Core smart contract for Flarity Pay Decentralized Marketplace.
  * @dev Combines FTSOv2 price feeds (on-chain rates) and FDC payment verification (cross-chain proofs).
  */
 contract FlarityMerchantGateway {
     
+    enum ListingType { Product, Service }
+
+    struct Listing {
+        uint256 id;
+        address seller;
+        string title;
+        string description;
+        uint256 priceUSD;           // Product cost in USD (18 decimal precision)
+        string imageUrl;
+        ListingType listingType;
+        bool active;
+    }
+
+    struct Review {
+        uint256 id;
+        address seller;
+        address buyer;
+        uint8 rating;                // 1 to 5 Flarity Stars
+        string comment;
+        uint256 timestamp;
+    }
+
     struct Invoice {
         uint256 id;
+        address buyer;               // Address of the buyer who created invoice
+        address seller;              // Address of the seller receiving payment
         uint256 amountUSD;           // Invoice amount in USD (18 decimal precision)
         bytes32 paymentReference;    // Unique 32-byte reference generated on checkout
         string currency;             // Target cryptocurrency ("XRP", "BTC", "DOGE")
@@ -25,7 +49,7 @@ contract FlarityMerchantGateway {
     IFtsoV2 public immutable ftsoV2;
     IPaymentVerification public fdcVerification;
     address public owner;
-    address public merchantWallet;
+    address public merchantWallet; // Default admin wallet for platform fees
 
     // Mapping of currency tickers to FTSOv2 feed IDs (21-bytes hex)
     mapping(string => bytes21) public ftsoFeeds;
@@ -34,17 +58,37 @@ contract FlarityMerchantGateway {
     // Mapping of currency tickers to FAsset representation token contracts
     mapping(string => MockFAsset) public fAssets;
 
-    // Invoice storage
+    // Database counts and mappings
+    uint256 public listingCount;
+    mapping(uint256 => Listing) public listings;
+
     uint256 public invoiceCount;
     mapping(uint256 => Invoice) public invoices;
     mapping(bytes32 => uint256) public referenceToInvoiceId;
 
+    uint256 public reviewCount;
+    mapping(address => Review[]) public sellerReviews;
+    mapping(address => uint256) public sellerRatingSums;
+    
+    // Verified purchase check: hasPurchasedFrom[buyer][seller] = true
+    mapping(address => mapping(address => bool)) public hasPurchasedFrom;
+
+    event ListingCreated(
+        uint256 indexed listingId,
+        address indexed seller,
+        string title,
+        uint256 priceUSD,
+        ListingType listingType
+    );
+
     event InvoiceCreated(
         uint256 indexed invoiceId,
+        address indexed buyer,
+        address indexed seller,
         uint256 amountUSD,
         string currency,
         uint256 amountCrypto,
-        bytes32 indexed paymentReference
+        bytes32 paymentReference
     );
     
     event PaymentSettled(
@@ -52,6 +96,14 @@ contract FlarityMerchantGateway {
         bytes32 transactionId,
         uint256 amountPaid,
         uint256 fassetsMinted
+    );
+
+    event ReviewSubmitted(
+        uint256 indexed reviewId,
+        address indexed seller,
+        address indexed buyer,
+        uint8 rating,
+        string comment
     );
 
     modifier onlyOwner() {
@@ -97,7 +149,7 @@ contract FlarityMerchantGateway {
     }
 
     /**
-     * @notice Update the merchant settlement wallet.
+     * @notice Update the default platform fee wallet.
      */
     function setMerchantWallet(address _merchantWallet) external onlyOwner {
         merchantWallet = _merchantWallet;
@@ -105,9 +157,6 @@ contract FlarityMerchantGateway {
 
     /**
      * @notice Query the live FTSOv2 exchange rate directly on Coston2.
-     * @param _ticker The ticker symbol (e.g. "XRP").
-     * @return price The price scaled by 10^decimals.
-     * @return decimals The scale factor.
      */
     function getLivePrice(string memory _ticker) public view returns (uint256 price, int8 decimals) {
         bytes21 feedId = ftsoFeeds[_ticker];
@@ -116,19 +165,46 @@ contract FlarityMerchantGateway {
     }
 
     /**
-     * @notice Create a new checkout payment invoice.
+     * @notice List a new product or service for sale in the marketplace.
+     */
+    function listItem(
+        string calldata _title,
+        string calldata _description,
+        uint256 _priceUSD,
+        string calldata _imageUrl,
+        ListingType _listingType
+    ) external returns (uint256 listingId) {
+        require(_priceUSD > 0, "Price must be positive");
+        
+        listingCount++;
+        listingId = listingCount;
+        
+        listings[listingId] = Listing({
+            id: listingId,
+            seller: msg.sender,
+            title: _title,
+            description: _description,
+            priceUSD: _priceUSD,
+            imageUrl: _imageUrl,
+            listingType: _listingType,
+            active: true
+        });
+        
+        emit ListingCreated(listingId, msg.sender, _title, _priceUSD, _listingType);
+    }
+
+    /**
+     * @notice Create a new checkout payment invoice associated with a specific listing.
      * @dev Dynamically computes the crypto amount due using the live FTSOv2 price oracle.
-     * @param _amountUSD The invoice cost in USD (18 decimal precision).
-     * @param _currency The target settlement currency ("XRP", "BTC", "DOGE").
-     * @param _paymentReference The unique payment reference generated on checkout.
-     * @return invoiceId The generated invoice identifier.
      */
     function createInvoice(
-        uint256 _amountUSD,
+        uint256 _listingId,
         string calldata _currency,
         bytes32 _paymentReference
     ) external returns (uint256 invoiceId) {
-        require(_amountUSD > 0, "Amount must be positive");
+        Listing memory listing = listings[_listingId];
+        require(listing.id != 0, "Listing does not exist");
+        require(listing.active, "Listing is inactive");
         require(referenceToInvoiceId[_paymentReference] == 0, "Payment reference already exists");
         
         // Fetch live exchange rate from FTSOv2
@@ -140,15 +216,16 @@ contract FlarityMerchantGateway {
         require(nativeDec > 0, "Unsupported currency decimals");
 
         // Formula: cryptoDue = (amountUSD * 10^oracleDecimals * 10^nativeDecimals) / (oraclePrice * 1e18)
-        // This ensures the calculated crypto is correctly scaled to its base units (e.g. satoshis, drops).
-        uint256 cryptoDue = (_amountUSD * (10 ** uint8(decimals)) * (10 ** nativeDec)) / (price * 1e18);
+        uint256 cryptoDue = (listing.priceUSD * (10 ** uint8(decimals)) * (10 ** nativeDec)) / (price * 1e18);
 
         invoiceCount++;
         invoiceId = invoiceCount;
 
         invoices[invoiceId] = Invoice({
             id: invoiceId,
-            amountUSD: _amountUSD,
+            buyer: msg.sender,
+            seller: listing.seller,
+            amountUSD: listing.priceUSD,
             paymentReference: _paymentReference,
             currency: _currency,
             amountCrypto: cryptoDue,
@@ -157,14 +234,12 @@ contract FlarityMerchantGateway {
 
         referenceToInvoiceId[_paymentReference] = invoiceId;
 
-        emit InvoiceCreated(invoiceId, _amountUSD, _currency, cryptoDue, _paymentReference);
+        emit InvoiceCreated(invoiceId, msg.sender, listing.seller, listing.priceUSD, _currency, cryptoDue, _paymentReference);
     }
 
     /**
      * @notice Settle an invoice by verifying its FDC cross-chain payment proof.
-     * @dev Calls the FDC verification contract, checks constraints, and mints FAssets.
-     * @param _invoiceId The invoice ID to settle.
-     * @param _proof The FDC verification proof structure.
+     * @dev Calls the FDC verification contract, checks constraints, and mints FAssets to the Seller.
      */
     function settlePayment(
         uint256 _invoiceId,
@@ -183,7 +258,7 @@ contract FlarityMerchantGateway {
         // 3. Verify that the payment amount meets or exceeds the required amount
         require(_proof.requestBody.amount >= invoice.amountCrypto, "Paid amount is insufficient");
 
-        // 4. Verify that the attestation type is a standard payment
+        // 4. Verify that the attestation type is a payment
         require(keccak256(bytes(_proof.requestBody.attestationType)) == keccak256(bytes("Payment")), "Invalid attestation type");
 
         // 5. Call Flare's FDC verification contract
@@ -193,14 +268,60 @@ contract FlarityMerchantGateway {
         // Mark invoice as settled
         invoice.settled = true;
 
-        // Mint wrapped FAssets equivalent to the paid amount to the merchant's wallet
+        // Record purchase to verify reviews
+        hasPurchasedFrom[invoice.buyer][invoice.seller] = true;
+
+        // Mint wrapped FAssets equivalent to the paid amount to the specific seller's wallet
         MockFAsset fAsset = fAssets[invoice.currency];
         uint256 mintedAmount = _proof.requestBody.amount;
         
         if (address(fAsset) != address(0)) {
-            fAsset.mint(merchantWallet, mintedAmount);
+            fAsset.mint(invoice.seller, mintedAmount);
         }
 
         emit PaymentSettled(_invoiceId, _proof.requestBody.transactionId, _proof.requestBody.amount, mintedAmount);
+    }
+
+    /**
+     * @notice Submit a review for a seller using "Flarity Stars" (1-5).
+     * @dev Restricts reviews to buyers with verified transactions with that seller.
+     */
+    function submitReview(
+        address _seller,
+        uint8 _rating,
+        string calldata _comment
+    ) external {
+        require(_rating >= 1 && _rating <= 5, "Rating must be between 1 and 5 Flarity Stars");
+        require(hasPurchasedFrom[msg.sender][_seller], "Only verified buyers can review");
+
+        reviewCount++;
+        
+        Review memory review = Review({
+            id: reviewCount,
+            seller: _seller,
+            buyer: msg.sender,
+            rating: _rating,
+            comment: _comment,
+            timestamp: block.timestamp
+        });
+
+        sellerReviews[_seller].push(review);
+        sellerRatingSums[_seller] += _rating;
+
+        emit ReviewSubmitted(reviewCount, _seller, msg.sender, _rating, _comment);
+    }
+
+    /**
+     * @notice Helper to get the total reviews count for a seller.
+     */
+    function getReviewsCount(address _seller) external view returns (uint256) {
+        return sellerReviews[_seller].length;
+    }
+
+    /**
+     * @notice Helper to get all reviews for a seller.
+     */
+    function getSellerReviews(address _seller) external view returns (Review[] memory) {
+        return sellerReviews[_seller];
     }
 }

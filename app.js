@@ -12,7 +12,7 @@ const FEED_IDS = {
     DOGE: "0x01444f47452f555344000000000000000000000000"
 };
 
-// Simplified ABI for FTSOv2 contract - getFeedById
+// Simplified ABI for FTSOv2 contract
 const FTSO_ABI = [
     "function getFeedById(bytes21 _feedId) external view returns (uint256 value, int8 decimals, uint64 timestamp)"
 ];
@@ -20,11 +20,66 @@ const FTSO_ABI = [
 // App Global State
 const state = {
     cart: [],
-    products: {
-        p1: { name: "Flarity Ledger Vault", price: 149.00 },
-        p2: { name: "Cyberpunk Mechanical Keyboard", price: 89.00 },
-        p3: { name: "Flarity Core Workstation", price: 1299.00 }
+    listings: [
+        {
+            id: 1,
+            seller: "0x5336E1e04A1d5F69b86e057b7D05621cBcc645b0", // Platform store / Admin
+            title: "Flarity Ledger Vault",
+            description: "Advanced hardware credential vault secured by off-chain Trusted Execution Environment keys.",
+            priceUSD: 149.00,
+            imageUrl: "images/wallet.jpg",
+            type: "Product",
+            active: true
+        },
+        {
+            id: 2,
+            seller: "0x5336E1e04A1d5F69b86e057b7D05621cBcc645b0",
+            title: "Cyberpunk Mechanical Keyboard",
+            description: "Tactile keyboard with glowing custom keys, obsidian build, and responsive switches.",
+            priceUSD: 89.00,
+            imageUrl: "images/keyboard.jpg",
+            type: "Product",
+            active: true
+        },
+        {
+            id: 3,
+            seller: "0x123f123456789012345678901234567890123456", // Seller A
+            title: "Solidity Code Security Audit",
+            description: "Complete security check of your smart contracts including a detailed vulnerability audit report.",
+            priceUSD: 299.00,
+            imageUrl: "https://images.unsplash.com/photo-1526374965328-7f61d4dc18c5?auto=format&fit=crop&w=600&q=80",
+            type: "Service",
+            active: true
+        },
+        {
+            id: 4,
+            seller: "0x987f654321098765432109876543210987654321", // Seller B
+            title: "Dapp Frontend Development",
+            description: "Premium glassmorphic user interface development with ethers.js or wagmi wallet connectivity.",
+            priceUSD: 899.00,
+            imageUrl: "images/workstation.jpg",
+            type: "Service",
+            active: true
+        }
+    ],
+    reviews: {
+        "0x5336E1e04A1d5F69b86e057b7D05621cBcc645b0": [
+            { buyer: "0x3A2b...dE89", rating: 5, comment: "Super fast transaction verification and high quality hardware device!", timestamp: "1 hour ago" }
+        ],
+        "0x123f123456789012345678901234567890123456": [
+            { buyer: "0x789F...66aa", rating: 5, comment: "Audited our token contracts, extremely thorough audit reports.", timestamp: "1 day ago" }
+        ],
+        "0x987f654321098765432109876543210987654321": [
+            { buyer: "0xbc8e...44ff", rating: 4, comment: "Excellent frontend styles, highly recommended coder.", timestamp: "3 days ago" }
+        ]
     },
+    verifiedPurchases: {
+        // Track local purchase history to satisfy verified buyer checks: "buyerAddress_sellerAddress": true
+        "shopperAddress_0x5336E1e04A1d5F69b86e057b7D05621cBcc645b0": true // Default pre-credited for testing
+    },
+    selectedReviewSeller: "0x5336E1e04A1d5F69b86e057b7D05621cBcc645b0",
+    interactiveRating: 5,
+    activeFilter: "all",
     prices: {
         FLR: 0.0182,
         XRP: 0.5840,
@@ -74,6 +129,13 @@ document.addEventListener("DOMContentLoaded", () => {
     initVisualizer();
     renderLedger();
     
+    // Marketplace upgrades
+    initMarketplaceFilter();
+    initListingForm();
+    initReviewsSystem();
+    renderMarketplaceListings();
+    renderReviews();
+
     // Periodically update network status and block numbers
     setInterval(updateNetworkData, 3000);
 });
@@ -107,7 +169,6 @@ async function initWeb3() {
         state.ethersProvider = new ethers.providers.JsonRpcProvider(COSTON2_RPC);
         state.ftsoContract = new ethers.Contract(FTSO_V2_ADDRESS, FTSO_ABI, state.ethersProvider);
         
-        // Test connection
         const block = await state.ethersProvider.getBlockNumber();
         state.costonBlockHeight = block;
         blockEl.textContent = block.toLocaleString();
@@ -115,7 +176,6 @@ async function initWeb3() {
         rpcStatusEl.textContent = "Connected";
         rpcStatusEl.className = "text-green";
         
-        // Fetch initial FTSO prices
         await fetchFTSOPrices();
     } catch (e) {
         console.warn("Unable to connect to Coston2 RPC. Using simulated local feed: ", e);
@@ -124,7 +184,6 @@ async function initWeb3() {
         rpcStatusEl.className = "text-orange";
         blockEl.textContent = state.costonBlockHeight.toLocaleString();
         
-        // Simulated local price updates
         simulatePrices();
     }
 }
@@ -138,7 +197,6 @@ async function fetchFTSOPrices() {
             const feedId = FEED_IDS[token];
             const data = await state.ftsoContract.getFeedById(feedId);
             
-            // value is a BigNumber, decimals is an int8
             const rawValue = data.value.toString();
             const decimals = data.decimals;
             const price = parseFloat(rawValue) / Math.pow(10, decimals);
@@ -157,7 +215,6 @@ function simulatePrices() {
         state.costonBlockHeight += 1;
         document.getElementById("current-block-height").textContent = state.costonBlockHeight.toLocaleString();
         
-        // Mock minor fluctuations
         const assets = ["FLR", "XRP", "BTC", "DOGE"];
         assets.forEach(asset => {
             const current = state.prices[asset];
@@ -166,7 +223,6 @@ function simulatePrices() {
             updatePriceUI(asset, state.prices[asset]);
         });
         
-        // Update checkout modal if active
         if (state.activeInvoice) {
             updateModalCalculations();
         }
@@ -185,11 +241,9 @@ async function updateNetworkData() {
             console.warn("RPC update failed:", e);
         }
     } else {
-        // Increment block locally
         state.costonBlockHeight += 1;
         document.getElementById("current-block-height").textContent = state.costonBlockHeight.toLocaleString();
         
-        // Mock fluctuations
         const assets = ["FLR", "XRP", "BTC", "DOGE"];
         assets.forEach(asset => {
             const current = state.prices[asset];
@@ -199,7 +253,6 @@ async function updateNetworkData() {
         });
     }
     
-    // Keep calculations fresh
     if (state.activeInvoice) {
         updateModalCalculations();
     }
@@ -222,24 +275,26 @@ function updatePriceUI(token, price) {
 // ================= SHOPPING CART & STOREFRONT =================
 
 function initCart() {
-    const addBtns = document.querySelectorAll(".btn-add-cart");
-    addBtns.forEach(btn => {
-        btn.addEventListener("click", (e) => {
-            const card = e.target.closest(".premium-product-card");
-            const id = card.getAttribute("data-id");
-            const name = card.getAttribute("data-name");
-            const price = parseFloat(card.getAttribute("data-price"));
-            
-            addToCart(id, name, price);
-            animateCartBtn(e.target);
-        });
+    // Add dynamically delegated listener since cards are generated at runtime
+    const grid = document.getElementById("marketplace-listings-grid");
+    grid.addEventListener("click", (e) => {
+        const btn = e.target.closest(".btn-add-cart");
+        if (!btn) return;
+        
+        const card = btn.closest(".premium-product-card");
+        const id = parseInt(card.getAttribute("data-id"));
+        const listing = state.listings.find(l => l.id === id);
+        
+        if (listing) {
+            addToCart(listing.id, listing.title, listing.priceUSD, listing.seller);
+            animateCartBtn(btn);
+        }
     });
 
     // Modal control listeners
     document.getElementById("btn-checkout").addEventListener("click", openCheckoutModal);
     document.getElementById("btn-close-modal").addEventListener("click", () => {
         closeCheckoutModal();
-        state.activeInvoice = null;
     });
     document.getElementById("btn-modal-pay-simulate").addEventListener("click", routeToWalletPayment);
     
@@ -267,12 +322,12 @@ function initCart() {
     });
 }
 
-function addToCart(id, name, price) {
+function addToCart(id, name, price, seller) {
     const existing = state.cart.find(item => item.id === id);
     if (existing) {
         existing.qty += 1;
     } else {
-        state.cart.push({ id, name, price, qty: 1 });
+        state.cart.push({ id, name, price, qty: 1, seller });
     }
     
     updateCartUI();
@@ -296,9 +351,9 @@ function updateCartUI() {
     
     if (state.cart.length === 0) {
         listEl.innerHTML = `
-            <div class="empty-cart-message">
-                <i class="ri-shopping-basket-line"></i>
-                <p>Your basket is currently empty</p>
+            <div class="basket-empty-state">
+                <i class="ri-shopping-basket-2-line"></i>
+                <p>Your shopping basket is empty</p>
             </div>
         `;
         checkoutBtn.disabled = true;
@@ -314,7 +369,7 @@ function updateCartUI() {
                     <h4>${item.name}</h4>
                     <span>${item.qty} × $${item.price.toFixed(2)}</span>
                 </div>
-                <button class="remove-btn" onclick="removeFromCart('${item.id}')">
+                <button class="remove-btn" onclick="removeFromCart(${item.id})">
                     <i class="ri-delete-bin-6-line"></i>
                 </button>
             `;
@@ -342,36 +397,289 @@ function animateCartBtn(btn) {
     }, 1500);
 }
 
-// Global exposure for cart item deletions
 window.removeFromCart = removeFromCart;
+
+// ================= DYNAMIC MARKETPLACE RENDERERS & FILTERS =================
+
+function initMarketplaceFilter() {
+    const filterBtns = document.querySelectorAll(".filter-btn");
+    filterBtns.forEach(btn => {
+        btn.addEventListener("click", () => {
+            filterBtns.forEach(b => b.classList.remove("active"));
+            btn.classList.add("active");
+            state.activeFilter = btn.getAttribute("data-filter");
+            renderMarketplaceListings();
+        });
+    });
+}
+
+function renderMarketplaceListings() {
+    const grid = document.getElementById("marketplace-listings-grid");
+    grid.innerHTML = "";
+    
+    const filtered = state.listings.filter(listing => {
+        if (!listing.active) return false;
+        if (state.activeFilter === "all") return true;
+        return listing.type === state.activeFilter;
+    });
+    
+    if (filtered.length === 0) {
+        grid.innerHTML = `
+            <div class="no-items-state">
+                <i class="ri-search-line"></i>
+                <p>No listings registered in this category.</p>
+            </div>
+        `;
+        return;
+    }
+    
+    filtered.forEach(item => {
+        const card = document.createElement("div");
+        card.className = "premium-product-card";
+        card.setAttribute("data-id", item.id);
+        card.setAttribute("data-name", item.title);
+        card.setAttribute("data-price", item.priceUSD);
+        
+        // Custom badges for categories
+        const badgeText = item.type === "Service" ? "Service" : "TEE Hardware";
+        const badgeClass = item.type === "Service" ? "badge-service" : "badge-feature";
+        const badgeIcon = item.type === "Service" ? "ri-tools-line" : "ri-instance-line";
+        
+        // Calculate stars average dynamically
+        const sellerReviews = state.reviews[item.seller] || [];
+        const reviewsCount = sellerReviews.length;
+        let averageStarsStr = "No reviews";
+        if (reviewsCount > 0) {
+            const sum = sellerReviews.reduce((acc, curr) => acc + curr.rating, 0);
+            averageStarsStr = `${(sum / reviewsCount).toFixed(1)} ★`;
+        }
+
+        // Auto generated abstract background if no image is present
+        const imgSrc = item.imageUrl || `https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?auto=format&fit=crop&w=600&q=80`;
+
+        card.innerHTML = `
+            <div class="card-image-box">
+                <img src="${imgSrc}" alt="${item.title}">
+                <span class="${badgeClass}"><i class="${badgeIcon}"></i> ${badgeText}</span>
+            </div>
+            <div class="card-details">
+                <div class="card-seller-row">
+                    <span class="seller-address-label"><i class="ri-shield-user-line"></i> ${item.seller.substring(0, 6)}...${item.seller.substring(38)}</span>
+                    <span class="seller-stars-badge"><i class="ri-star-fill text-orange"></i> ${averageStarsStr}</span>
+                </div>
+                <h3 class="product-title">${item.title}</h3>
+                <p class="product-desc">${item.description}</p>
+                <div class="card-pricing-footer">
+                    <span class="product-price">$${item.priceUSD.toFixed(2)}</span>
+                    <button class="btn btn-glow btn-add-cart">
+                        <i class="ri-shopping-cart-2-line"></i> Add to Cart
+                    </button>
+                </div>
+            </div>
+        `;
+        grid.appendChild(card);
+    });
+}
+
+function initListingForm() {
+    const form = document.getElementById("form-list-item");
+    form.addEventListener("submit", (e) => {
+        e.preventDefault();
+        
+        const title = document.getElementById("list-title").value;
+        const price = parseFloat(document.getElementById("list-price").value);
+        const type = document.getElementById("list-type").value;
+        const description = document.getElementById("list-description").value;
+        const imageUrl = document.getElementById("list-image").value;
+        
+        const newId = state.listings.length + 1;
+        const mockSellerAddress = "0x5336E1e04A1d5F69b86e057b7D05621cBcc645b0"; // Default deployer/merchant
+        
+        const newListing = {
+            id: newId,
+            seller: mockSellerAddress,
+            title: title,
+            description: description,
+            priceUSD: price,
+            imageUrl: imageUrl || null,
+            type: type,
+            active: true
+        };
+        
+        state.listings.push(newListing);
+        
+        // Refresh grid
+        renderMarketplaceListings();
+        
+        // Reset form
+        form.reset();
+        showBannerNotification(`Listing on-chain success! Created item #${newId}: ${title}`);
+    });
+}
+
+// ================= REVIEWS & FLARITY STARS LOGIC =================
+
+function initReviewsSystem() {
+    const sellerSelector = document.getElementById("select-seller");
+    sellerSelector.addEventListener("change", (e) => {
+        state.selectedReviewSeller = e.target.value;
+        renderReviews();
+    });
+
+    // Rating star clicks
+    const starsContainer = document.getElementById("rating-stars-interactive");
+    starsContainer.addEventListener("click", (e) => {
+        const star = e.target.closest(".star-interactive");
+        if (!star) return;
+        
+        const rating = parseInt(star.getAttribute("data-val"));
+        state.interactiveRating = rating;
+        
+        // Highlight active stars
+        const stars = starsContainer.querySelectorAll(".star-interactive");
+        stars.forEach(s => {
+            const val = parseInt(s.getAttribute("data-val"));
+            if (val <= rating) {
+                s.innerHTML = `<i class="ri-star-fill"></i>`;
+            } else {
+                s.innerHTML = `<i class="ri-star-line"></i>`;
+            }
+        });
+        
+        document.getElementById("selected-stars-text").textContent = `${rating} Flarity Stars`;
+    });
+
+    // Submit review form
+    const form = document.getElementById("form-submit-review");
+    form.addEventListener("submit", (e) => {
+        e.preventDefault();
+        
+        const comment = document.getElementById("review-comment").value;
+        const seller = state.selectedReviewSeller;
+        
+        // Verified purchase check
+        const relationKey = `shopperAddress_${seller}`;
+        if (!state.verifiedPurchases[relationKey]) {
+            showBannerNotification("Access Denied: Only verified buyers can submit comments for this seller.");
+            return;
+        }
+
+        if (!state.reviews[seller]) {
+            state.reviews[seller] = [];
+        }
+
+        state.reviews[seller].unshift({
+            buyer: "0xShopperAddress...",
+            rating: state.interactiveRating,
+            comment: comment,
+            timestamp: "just now"
+        });
+
+        renderReviews();
+        form.reset();
+        
+        // Reset interactive stars
+        state.interactiveRating = 5;
+        const stars = starsContainer.querySelectorAll(".star-interactive");
+        stars.forEach(s => s.innerHTML = `<i class="ri-star-fill"></i>`);
+        document.getElementById("selected-stars-text").textContent = "5 Flarity Stars";
+        
+        // Recalculate listing averages
+        renderMarketplaceListings();
+
+        showBannerNotification("Review submitted successfully on-chain!");
+    });
+}
+
+function renderReviews() {
+    const list = document.getElementById("reviews-comments-list");
+    const avgVal = document.getElementById("average-stars-val");
+    const avgVisual = document.getElementById("average-stars-visual");
+    const countLabel = document.getElementById("reviews-count-label");
+    
+    list.innerHTML = "";
+    
+    const seller = state.selectedReviewSeller;
+    const sellerReviews = state.reviews[seller] || [];
+    const count = sellerReviews.length;
+    
+    let sum = 0;
+    
+    if (count === 0) {
+        avgVal.textContent = "0.0";
+        avgVisual.innerHTML = `<i class="ri-star-line"></i><i class="ri-star-line"></i><i class="ri-star-line"></i><i class="ri-star-line"></i><i class="ri-star-line"></i>`;
+        countLabel.textContent = "No verified purchases reviews yet.";
+        list.innerHTML = `<div class="empty-reviews-state">No feedback registered for this seller profile yet.</div>`;
+        return;
+    }
+
+    sellerReviews.forEach(r => {
+        sum += r.rating;
+        const commentRow = document.createElement("div");
+        commentRow.className = "review-comment-card glass-panel";
+        
+        let starsRow = "";
+        for (let i = 1; i <= 5; i++) {
+            if (i <= r.rating) {
+                starsRow += `<i class="ri-star-fill text-orange"></i>`;
+            } else {
+                starsRow += `<i class="ri-star-line"></i>`;
+            }
+        }
+
+        commentRow.innerHTML = `
+            <div class="review-comment-header">
+                <span class="reviewer-addr"><i class="ri-user-line"></i> ${r.buyer}</span>
+                <span class="review-time">${r.timestamp}</span>
+            </div>
+            <div class="review-rating-stars-row">${starsRow}</div>
+            <p class="review-text">"${r.comment}"</p>
+        `;
+        list.appendChild(commentRow);
+    });
+
+    const average = sum / count;
+    avgVal.textContent = average.toFixed(1);
+    
+    // Average visual stars
+    let averageStarsHTML = "";
+    for (let i = 1; i <= 5; i++) {
+        if (i <= Math.round(average)) {
+            averageStarsHTML += `<i class="ri-star-fill text-orange"></i>`;
+        } else {
+            averageStarsHTML += `<i class="ri-star-line"></i>`;
+        }
+    }
+    avgVisual.innerHTML = averageStarsHTML;
+    countLabel.textContent = `Based on ${count} verified ${count === 1 ? 'purchase' : 'purchases'}`;
+}
 
 // ================= CHECKOUT MODAL LOGIC =================
 
 function openCheckoutModal() {
     const modal = document.getElementById("checkout-modal");
     
-    // Build active invoice details
     const totalUSD = state.cart.reduce((sum, item) => sum + (item.price * item.qty), 0);
     const itemList = state.cart.map(item => `${item.name} (x${item.qty})`).join(", ");
     
-    // Generate a unique 32-byte payment reference
-    // Format: 0x01 (Direct Mint) + 0x02 (Flarity Wallet ID) + random 30 bytes
     const randomHex = Array.from({length: 60}, () => Math.floor(Math.random()*16).toString(16)).join("");
     const payRef = "0x0102" + randomHex;
     
+    // Track target seller for this checkout. For a multi-item cart, we choose the seller of the first item
+    const targetSeller = state.cart.length > 0 ? state.cart[0].seller : "0x5336E1e04A1d5F69b86e057b7D05621cBcc645b0";
+
     state.activeInvoice = {
         usdTotal: totalUSD,
         items: itemList,
         payRef: payRef,
-        currency: "XRP" // Default
+        seller: targetSeller,
+        currency: "XRP" 
     };
     
-    // Populate Modal UI static fields
     document.getElementById("modal-item-list").textContent = itemList;
     document.getElementById("modal-usd-total").textContent = `$${totalUSD.toFixed(2)}`;
     document.getElementById("payment-reference-hex").textContent = payRef;
     
-    // Active default currency tab
     const currencyCards = document.querySelectorAll(".asset-selector-card");
     currencyCards.forEach(c => {
         c.classList.remove("active");
@@ -396,20 +704,17 @@ function updateModalCalculations() {
     const usdTotal = state.activeInvoice.usdTotal;
     const cryptoPrice = state.prices[currency];
     
-    // Rates conversion for cards
     document.getElementById("rate-XRP").textContent = `1 XRP = $${state.prices.XRP.toFixed(4)}`;
     document.getElementById("rate-BTC").textContent = `1 BTC = $${state.prices.BTC.toLocaleString(undefined, {maximumFractionDigits:0})}`;
     document.getElementById("rate-DOGE").textContent = `1 DOGE = $${state.prices.DOGE.toFixed(4)}`;
     
-    // Calculations
     const cryptoSubtotal = usdTotal / cryptoPrice;
-    const mintFee = cryptoSubtotal * 0.001; // 0.1% mint fee
+    const mintFee = cryptoSubtotal * 0.001; 
     const cryptoTotal = cryptoSubtotal + mintFee;
     
     document.getElementById("modal-mint-fee").textContent = `${mintFee.toFixed(currency === 'BTC' ? 6 : 4)} ${currency}`;
     document.getElementById("modal-crypto-total").textContent = `${cryptoTotal.toFixed(currency === 'BTC' ? 6 : 4)} ${currency}`;
     
-    // Update destination addresses
     const destAddr = DESTINATION_ADDRESSES[currency];
     document.getElementById("merchant-destination-address").textContent = destAddr;
     
@@ -420,7 +725,6 @@ function updateModalCalculations() {
 function routeToWalletPayment() {
     if (!state.activeInvoice) return;
     
-    // Populate Wallet Tab Details
     const invoice = state.activeInvoice;
     
     document.getElementById("wallet-dest-addr").textContent = invoice.destAddr;
@@ -429,7 +733,6 @@ function routeToWalletPayment() {
     let decimals = invoice.currency === 'BTC' ? 6 : 4;
     document.getElementById("wallet-amount-due").textContent = `${invoice.cryptoTotal.toFixed(decimals)} ${invoice.currency}`;
     
-    // Set wallet currency selector to current invoice asset
     const walletAssetCards = document.querySelectorAll(".wallet-asset-pill");
     walletAssetCards.forEach(card => {
         card.classList.remove("active");
@@ -438,26 +741,20 @@ function routeToWalletPayment() {
         }
     });
     
-    // Activate Broadcast button
     const broadcastBtn = document.getElementById("btn-broadcast-tx");
     broadcastBtn.disabled = false;
     
-    // Close modal
     closeCheckoutModal();
     
-    // Transition Tab
     const visualizerTabBtn = document.getElementById("nav-visualizer-btn");
     visualizerTabBtn.click();
     
-    // Flash visualizer badge
     const badge = document.getElementById("pending-tx-badge");
     badge.style.display = "inline-block";
     
-    // Trigger desktop alert
-    showBannerNotification("Checkout details loaded to your simulated wallet. Ready to broadcast payment.");
+    showBannerNotification("Checkout details loaded to shopper wallet terminal. Ready to broadcast cross-chain payment.");
 }
 
-// Helper to copy text to clipboard
 function copyText(elementId) {
     const text = document.getElementById(elementId).textContent;
     navigator.clipboard.writeText(text).then(() => {
@@ -471,14 +768,12 @@ function initVisualizer() {
     const broadcastBtn = document.getElementById("btn-broadcast-tx");
     broadcastBtn.addEventListener("click", runFDCAttestationSimulation);
     
-    // Asset card switches in wallet
     const assetCards = document.querySelectorAll(".wallet-asset-pill");
     assetCards.forEach(card => {
         card.addEventListener("click", () => {
             assetCards.forEach(c => c.classList.remove("active"));
             card.classList.add("active");
             
-            // If no active invoice, just mock balances
             if (!state.activeInvoice) {
                 const asset = card.getAttribute("data-asset");
                 document.getElementById("wallet-dest-addr").textContent = "No active invoice";
@@ -502,20 +797,19 @@ async function runFDCAttestationSimulation() {
     const invoice = state.activeInvoice;
     const currency = invoice.currency;
     const totalPaid = invoice.cryptoTotal;
+    const seller = invoice.seller;
     
-    // Generate simulated tx hash on the external chain
     const txHash = "0x" + Array.from({length: 64}, () => Math.floor(Math.random()*16).toString(16)).join("");
     
     // Reset FDC visualizer steps UI
-    const steps = document.querySelectorAll(".fdc-step");
-    steps.forEach(s => {
+    const stepIds = ["step-broadcast", "step-voting", "step-merkle", "step-mint"];
+    stepIds.forEach(id => {
+        const s = document.getElementById(id);
         s.classList.remove("active", "completed");
-        const stepData = s.querySelector(".step-data");
-        if (stepData) stepData.textContent = "Awaiting verification...";
     });
     
-    const votes = document.querySelectorAll(".provider-vote");
-    votes.forEach(v => v.classList.remove("voted"));
+    const validatorNodes = document.querySelectorAll(".validator-node");
+    validatorNodes.forEach(v => v.classList.remove("voted"));
     
     document.getElementById("merkle-root").textContent = "Root: 0x00...";
     document.getElementById("merkle-root").classList.remove("matched");
@@ -531,7 +825,6 @@ async function runFDCAttestationSimulation() {
         <strong>Reference:</strong> ${invoice.payRef.substring(0, 14)}...
     `;
     
-    // Reduce simulated shopper balance
     state.balances.wallet[currency] -= totalPaid;
     updateWalletBalancesUI();
     
@@ -543,11 +836,10 @@ async function runFDCAttestationSimulation() {
     const step2 = document.getElementById("step-voting");
     step2.classList.add("active");
     
-    // Vote simulation: validators agree one by one
     for (let i = 1; i <= 10; i++) {
         await sleep(200);
-        const pVote = document.querySelector(`.provider-vote[data-id="${i}"]`);
-        if (pVote) pVote.classList.add("voted");
+        const node = document.querySelector(`.validator-node[data-id="${i}"]`);
+        if (node) node.classList.add("voted");
     }
     
     await sleep(1500);
@@ -580,13 +872,13 @@ async function runFDCAttestationSimulation() {
     step4.classList.add("active");
     
     const mintTx = "0x" + Array.from({length: 64}, () => Math.floor(Math.random()*16).toString(16)).join("");
-    const fassetAmount = totalPaid * 0.999; // Minted FAsset (subtracting 0.1% validator reserve)
+    const fassetAmount = totalPaid * 0.999; 
     
     document.getElementById("fdc-data-proof").innerHTML = `
         <strong>On-Chain Merkle Root verified!</strong><br>
-        <strong>Proof validation:</strong> Success<br>
-        <strong>Minted FAsset:</strong> <span class="text-green">+${fassetAmount.toFixed(4)} F${currency}</span> to Smart Account<br>
-        <strong>Flare Tx:</strong> <span class="text-orange">${mintTx.substring(0, 18)}...</span>
+        <strong>Seller Target Wallet:</strong> <span class="text-orange">${seller.substring(0, 10)}...${seller.substring(38)}</span><br>
+        <strong>Minted FAsset:</strong> <span class="text-green">+${fassetAmount.toFixed(4)} F${currency}</span> (Settle Payout)<br>
+        <strong>Flare Verification Tx:</strong> <span class="text-orange">${mintTx.substring(0, 18)}...</span>
     `;
     
     await sleep(2000);
@@ -594,11 +886,18 @@ async function runFDCAttestationSimulation() {
     step4.classList.add("completed");
     
     // --- PROCESS TRANSACTION SUCCESS ---
-    // Update merchant balances
-    const mintedType = `F${currency}`; // FXRP, FBTC, FDOGE
-    state.balances.merchant[mintedType] += fassetAmount;
-    state.balances.merchant.revenue += usdTotalConversion(currency, totalPaid);
+    // Update merchant balances if the merchant is the admin
+    if (seller === "0x5336E1e04A1d5F69b86e057b7D05621cBcc645b0") {
+        const mintedType = `F${currency}`; 
+        state.balances.merchant[mintedType] += fassetAmount;
+        state.balances.merchant.revenue += usdTotalConversion(currency, totalPaid);
+        updateMerchantDashboardUI();
+    }
     
+    // Pre-credit purchase verification so the buyer can leave reviews for this seller
+    const relationKey = `shopperAddress_${seller}`;
+    state.verifiedPurchases[relationKey] = true;
+
     // Add to ledger
     const orderId = "#" + Math.floor(Math.random() * 1000 + 8025);
     const timeText = "just now";
@@ -616,21 +915,19 @@ async function runFDCAttestationSimulation() {
     state.ledger.unshift({
         id: orderId,
         cryptoPaid: `${totalPaid.toFixed(currency==='BTC'?5:2)} ${currency}`,
-        fassetsMinted: `${fassetAmount.toFixed(currency==='BTC'?5:2)} ${mintedType}`,
+        fassetsMinted: `${fassetAmount.toFixed(currency==='BTC'?5:2)} F${currency}`,
         chain: chainName,
         chainClass: chainClass,
         status: "Verified",
         time: timeText
     });
     
-    // Update UI elements
-    updateMerchantDashboardUI();
     renderLedger();
     clearCart();
     
     state.activeInvoice = null;
     
-    showBannerNotification("FAssets minted successfully! Payment verified via Flare FDC.");
+    showBannerNotification(`FAssets successfully verified & minted to seller ${seller.substring(0, 6)}...!`);
 }
 
 function updateWalletBalancesUI() {
@@ -704,6 +1001,7 @@ function updateMerchantDashboardUI() {
 
 function renderLedger() {
     const tbody = document.getElementById("ledger-body");
+    if (!tbody) return;
     tbody.innerHTML = "";
     
     state.ledger.forEach(item => {
@@ -724,13 +1022,10 @@ function clearCart() {
     state.cart = [];
     updateCartUI();
     
-    // Reset instructions on visualizer
     document.getElementById("wallet-dest-addr").textContent = "Connect checkout to load...";
     document.getElementById("wallet-pay-ref").textContent = "0x0000000000...";
     document.getElementById("wallet-amount-due").textContent = "0.00";
 }
-
-// ================= UTILITIES =================
 
 // Simple temporary toast/notification banner
 function showBannerNotification(message) {
@@ -754,12 +1049,10 @@ function showBannerNotification(message) {
     banner.innerHTML = `<i class="ri-information-line text-orange" style="margin-right:8px; vertical-align:middle;"></i> ${message}`;
     document.body.appendChild(banner);
     
-    // Trigger transition
     setTimeout(() => {
         banner.style.transform = "translateX(-50%) translateY(0)";
     }, 100);
     
-    // Fade out
     setTimeout(() => {
         banner.style.transform = "translateX(-50%) translateY(100px)";
         setTimeout(() => {
