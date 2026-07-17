@@ -157,10 +157,45 @@ document.addEventListener("DOMContentLoaded", () => {
     renderMarketplaceListings();
     renderReviews();
 
-    // Connect wallet listener
+    // Connect wallet listener (opens selector modal)
     const connectBtn = document.getElementById("btn-connect-wallet");
-    if (connectBtn) {
-        connectBtn.addEventListener("click", connectWallet);
+    const walletModal = document.getElementById("wallet-selector-modal");
+    const closeWalletBtn = document.getElementById("btn-close-wallet-modal");
+
+    if (connectBtn && walletModal) {
+        connectBtn.addEventListener("click", () => {
+            walletModal.classList.add("active");
+        });
+    }
+
+    if (closeWalletBtn && walletModal) {
+        closeWalletBtn.addEventListener("click", () => {
+            walletModal.classList.remove("active");
+        });
+    }
+
+    // Modal provider click buttons
+    const btnMeta = document.getElementById("btn-connect-metamask");
+    const btnOkx = document.getElementById("btn-connect-okx");
+    const btnCoin = document.getElementById("btn-connect-coinbase");
+
+    if (btnMeta) {
+        btnMeta.addEventListener("click", () => {
+            connectWallet("metamask");
+            walletModal.classList.remove("active");
+        });
+    }
+    if (btnOkx) {
+        btnOkx.addEventListener("click", () => {
+            connectWallet("okx");
+            walletModal.classList.remove("active");
+        });
+    }
+    if (btnCoin) {
+        btnCoin.addEventListener("click", () => {
+            connectWallet("injected");
+            walletModal.classList.remove("active");
+        });
     }
 
     // Periodically update network status and block numbers
@@ -216,34 +251,58 @@ async function initWeb3() {
 }
 
 // Connect to MetaMask or switch to Coston2
-async function connectWallet() {
-    if (typeof window.ethereum === "undefined") {
-        showBannerNotification("MetaMask is not installed. Please install it to connect on-chain.");
+async function connectWallet(walletType = "injected") {
+    let providerSource = null;
+    
+    if (walletType === "okx") {
+        providerSource = window.okxwallet || (window.ethereum && window.ethereum.isOkxWallet ? window.ethereum : null);
+        if (!providerSource) {
+            showBannerNotification("OKX Wallet is not installed. Please install it or use MetaMask.");
+            return false;
+        }
+    } else if (walletType === "metamask") {
+        providerSource = window.ethereum;
+        if (window.ethereum && window.ethereum.providers) {
+            providerSource = window.ethereum.providers.find(p => p.isMetaMask) || window.ethereum;
+        }
+        if (!providerSource) {
+            showBannerNotification("MetaMask is not installed.");
+            return false;
+        }
+    } else {
+        providerSource = window.ethereum;
+        if (window.ethereum && window.ethereum.providers) {
+            providerSource = window.ethereum.providers.find(p => p.isCoinbaseWallet) || window.ethereum;
+        }
+    }
+
+    if (!providerSource) {
+        showBannerNotification("No compatible Web3 wallet detected in browser.");
         return false;
     }
-    
+
     const connectBtn = document.getElementById("btn-connect-wallet");
     connectBtn.disabled = true;
     connectBtn.textContent = "Connecting...";
 
     try {
-        const accounts = await window.ethereum.request({ method: "eth_requestAccounts" });
+        const accounts = await providerSource.request({ method: "eth_requestAccounts" });
         state.userAddress = accounts[0];
         state.userConnected = true;
         
-        const browserProvider = new ethers.providers.Web3Provider(window.ethereum);
+        const browserProvider = new ethers.providers.Web3Provider(providerSource);
         const signer = browserProvider.getSigner();
         
         const network = await browserProvider.getNetwork();
         if (network.chainId !== 114) {
             try {
-                await window.ethereum.request({
+                await providerSource.request({
                     method: "wallet_switchEthereumChain",
                     params: [{ chainId: "0x72" }] // Chain ID 114 in hex
                 });
             } catch (switchError) {
                 if (switchError.code === 4902) {
-                    await window.ethereum.request({
+                    await providerSource.request({
                         method: "wallet_addEthereumChain",
                         params: [{
                             chainId: "0x72",
@@ -263,16 +322,20 @@ async function connectWallet() {
         connectBtn.className = "btn btn-sm btn-glow text-green";
         connectBtn.disabled = false;
         
-        showBannerNotification("MetaMask connected successfully on Coston2!");
+        showBannerNotification(`Connected to ${walletType === 'okx' ? 'OKX Wallet' : walletType === 'metamask' ? 'MetaMask' : 'Wallet'} on Coston2!`);
         updateSellerSelectOptions();
         await fetchListingsFromContract();
         return true;
         
     } catch (err) {
-        console.error("MetaMask connection failed:", err);
+        console.error("Wallet connection failed:", err);
+        state.userAddress = null;
+        state.userConnected = false;
+        state.gatewayContract = null;
         connectBtn.textContent = "Connect Wallet";
+        connectBtn.className = "btn btn-sm btn-glow";
         connectBtn.disabled = false;
-        showBannerNotification("Wallet connection failed.");
+        showBannerNotification("Wallet connection failed or rejected by user.");
         return false;
     }
 }

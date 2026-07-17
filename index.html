@@ -667,6 +667,30 @@
             </div>
         </div>
     </div>
+    
+    <!-- ================= WALLET SELECTOR MODAL ================= -->
+    <div class="modal-overlay" id="wallet-selector-modal" style="z-index: 2000;">
+        <div class="stripe-checkout-modal glass-panel animated-scale-in" style="max-width: 420px; padding: 25px;">
+            <button class="modal-dismiss" id="btn-close-wallet-modal"><i class="ri-close-line"></i></button>
+            <h3 style="margin-bottom: 8px; text-align: center;"><i class="ri-wallet-3-line text-orange"></i> Connect Wallet</h3>
+            <p style="font-size: 0.8rem; color: var(--text-secondary); text-align: center; margin-bottom: 20px;">Choose your preferred Web3 provider to interact with the Coston2 Testnet Gateway.</p>
+            
+            <div style="display: flex; flex-direction: column; gap: 12px;">
+                <button class="btn btn-payment btn-block" id="btn-connect-metamask" style="background: rgba(246, 133, 27, 0.15); border: 1px solid rgba(246, 133, 27, 0.3); color: #fff; justify-content: flex-start; padding: 12px 16px; display: flex; align-items: center;">
+                    <img src="https://upload.wikimedia.org/wikipedia/commons/3/36/MetaMask_Logo.svg" alt="MetaMask" style="height: 24px; margin-right: 12px;">
+                    MetaMask
+                </button>
+                <button class="btn btn-payment btn-block" id="btn-connect-okx" style="background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(255, 255, 255, 0.1); color: #fff; justify-content: flex-start; padding: 12px 16px; display: flex; align-items: center;">
+                    <img src="https://www.okx.com/cdn/assets/imgs/221/582C7E2E0A4E5C0D.png" alt="OKX Wallet" style="height: 24px; margin-right: 12px; border-radius: 4px;">
+                    OKX Wallet
+                </button>
+                <button class="btn btn-payment btn-block" id="btn-connect-coinbase" style="background: rgba(0, 82, 255, 0.15); border: 1px solid rgba(0, 82, 255, 0.3); color: #fff; justify-content: flex-start; padding: 12px 16px; display: flex; align-items: center;">
+                    <img src="https://images.ctfassets.net/q5ulk2c65860/4rilYrDugK4s6MgESaGzdM/1472a6c01f37f25f2c0032e38c92b20e/coinbase-wallet-logo.png" alt="Coinbase Wallet" style="height: 24px; margin-right: 12px; border-radius: 4px;">
+                    Coinbase / Injected Wallet
+                </button>
+            </div>
+        </div>
+    </div>
 
     <!-- Scripts -->
     <script src="https://cdn.jsdelivr.net/npm/ethers@5.7.2/dist/ethers.umd.min.js"></script>
