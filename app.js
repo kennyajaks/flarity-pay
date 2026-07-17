@@ -33,6 +33,49 @@ const GATEWAY_ABI = [
     "function invoiceCount() external view returns (uint256)"
 ];
 
+const INITIAL_DEMO_LISTINGS = [
+    {
+        id: 1,
+        seller: "0x5336E1e04A1d5F69b86e057b7D05621cBcc645b0", // Platform store / Admin
+        title: "Flarity Ledger Vault",
+        description: "Advanced hardware credential vault secured by off-chain Trusted Execution Environment keys.",
+        priceUSD: 149.00,
+        imageUrl: "images/wallet.jpg",
+        type: "Product",
+        active: true
+    },
+    {
+        id: 2,
+        seller: "0x5336E1e04A1d5F69b86e057b7D05621cBcc645b0",
+        title: "Cyberpunk Mechanical Keyboard",
+        description: "Tactile keyboard with glowing custom keys, obsidian build, and responsive switches.",
+        priceUSD: 89.00,
+        imageUrl: "images/keyboard.jpg",
+        type: "Product",
+        active: true
+    },
+    {
+        id: 3,
+        seller: "0x123f123456789012345678901234567890123456", // Seller A
+        title: "Solidity Code Security Audit",
+        description: "Complete security check of your smart contracts including a detailed vulnerability audit report.",
+        priceUSD: 299.00,
+        imageUrl: "https://images.unsplash.com/photo-1526374965328-7f61d4dc18c5?auto=format&fit=crop&w=600&q=80",
+        type: "Service",
+        active: true
+    },
+    {
+        id: 4,
+        seller: "0x987f654321098765432109876543210987654321", // Seller B
+        title: "Dapp Frontend Development",
+        description: "Premium glassmorphic user interface development with ethers.js or wagmi wallet connectivity.",
+        priceUSD: 899.00,
+        imageUrl: "images/workstation.jpg",
+        type: "Service",
+        active: true
+    }
+];
+
 // App Global State
 const state = {
     cart: [],
@@ -41,48 +84,7 @@ const state = {
     userAddress: null,
     userConnected: false,
     gatewayContract: null,
-    listings: [
-        {
-            id: 1,
-            seller: "0x5336E1e04A1d5F69b86e057b7D05621cBcc645b0", // Platform store / Admin
-            title: "Flarity Ledger Vault",
-            description: "Advanced hardware credential vault secured by off-chain Trusted Execution Environment keys.",
-            priceUSD: 149.00,
-            imageUrl: "images/wallet.jpg",
-            type: "Product",
-            active: true
-        },
-        {
-            id: 2,
-            seller: "0x5336E1e04A1d5F69b86e057b7D05621cBcc645b0",
-            title: "Cyberpunk Mechanical Keyboard",
-            description: "Tactile keyboard with glowing custom keys, obsidian build, and responsive switches.",
-            priceUSD: 89.00,
-            imageUrl: "images/keyboard.jpg",
-            type: "Product",
-            active: true
-        },
-        {
-            id: 3,
-            seller: "0x123f123456789012345678901234567890123456", // Seller A
-            title: "Solidity Code Security Audit",
-            description: "Complete security check of your smart contracts including a detailed vulnerability audit report.",
-            priceUSD: 299.00,
-            imageUrl: "https://images.unsplash.com/photo-1526374965328-7f61d4dc18c5?auto=format&fit=crop&w=600&q=80",
-            type: "Service",
-            active: true
-        },
-        {
-            id: 4,
-            seller: "0x987f654321098765432109876543210987654321", // Seller B
-            title: "Dapp Frontend Development",
-            description: "Premium glassmorphic user interface development with ethers.js or wagmi wallet connectivity.",
-            priceUSD: 899.00,
-            imageUrl: "images/workstation.jpg",
-            type: "Service",
-            active: true
-        }
-    ],
+    listings: [...INITIAL_DEMO_LISTINGS],
     reviews: {
         "0x5336E1e04A1d5F69b86e057b7D05621cBcc645b0": [
             { buyer: "0x3A2b...dE89", rating: 5, comment: "Super fast transaction verification and high quality hardware device!", timestamp: "1 hour ago" }
@@ -370,7 +372,7 @@ async function fetchListingsFromContract() {
             const data = await state.gatewayContract.listings(i);
             if (data.active) {
                 listingsArray.push({
-                    id: data.id.toNumber(),
+                    id: data.id.toNumber() + 1000, // Shift ID to avoid collision with demo listings
                     seller: data.seller,
                     title: data.title,
                     description: data.description,
@@ -382,10 +384,9 @@ async function fetchListingsFromContract() {
             }
         }
         
-        if (listingsArray.length > 0) {
-            state.listings = listingsArray;
-            renderMarketplaceListings();
-        }
+        // Merge initial demo products with live on-chain items
+        state.listings = [...INITIAL_DEMO_LISTINGS, ...listingsArray];
+        renderMarketplaceListings();
     } catch (e) {
         console.error("Error fetching listings from contract:", e);
     }
@@ -755,8 +756,9 @@ function initListingForm() {
 
                 let tx;
                 if (state.editListingId !== null && state.editListingId !== undefined) {
+                    const onChainId = state.editListingId > 1000 ? state.editListingId - 1000 : state.editListingId;
                     tx = await state.gatewayContract.editListing(
-                        state.editListingId,
+                        onChainId,
                         title,
                         description,
                         priceWei,
@@ -868,7 +870,8 @@ async function deleteListing(id) {
     if (state.userConnected && state.gatewayContract) {
         try {
             showBannerNotification("Confirm listing deletion in MetaMask wallet...");
-            const tx = await state.gatewayContract.deleteListing(id);
+            const onChainId = id > 1000 ? id - 1000 : id;
+            const tx = await state.gatewayContract.deleteListing(onChainId);
             showBannerNotification("Broadcasting delete transaction on-chain...");
             await tx.wait();
             showBannerNotification("Listing deleted from Coston2 registry!");
