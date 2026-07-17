@@ -20,11 +20,11 @@ const FTSO_ABI = [
 
 // Simplified ABI for FlarityMerchantGateway contract
 const GATEWAY_ABI = [
-    "function listItem(string calldata _title, string calldata _description, uint256 _priceUSD, string calldata _imageUrl, uint8 _listingType) external returns (uint256)",
-    "function editListing(uint256 _listingId, string calldata _title, string calldata _description, uint256 _priceUSD, string calldata _imageUrl, uint8 _listingType, bool _active) external",
+    "function listItem(string _title, string _description, uint256 _priceUSD, string _imageUrl, uint8 _listingType) external returns (uint256)",
+    "function editListing(uint256 _listingId, string _title, string _description, uint256 _priceUSD, string _imageUrl, uint8 _listingType, bool _active) external",
     "function deleteListing(uint256 _listingId) external",
-    "function createInvoice(uint256 _listingId, string calldata _currency, bytes32 _paymentReference) external returns (uint256)",
-    "function submitReview(address _seller, uint8 _rating, string calldata _comment) external",
+    "function createInvoice(uint256 _listingId, string _currency, bytes32 _paymentReference) external returns (uint256)",
+    "function submitReview(address _seller, uint8 _rating, string _comment) external",
     "function getReviewsCount(address _seller) external view returns (uint256)",
     "function getSellerReviews(address _seller) external view returns (tuple(uint256 id, address seller, address buyer, uint8 rating, string comment, uint256 timestamp)[])",
     "function listings(uint256) external view returns (uint256 id, address seller, string title, string description, uint256 priceUSD, string imageUrl, uint8 listingType, bool active)",
