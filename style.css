@@ -2064,3 +2064,176 @@ body {
     background: rgba(239, 68, 68, 0.2);
     color: #fff;
 }
+
+/* ==========================================================================
+   MOBILE & VIEWPORT OPTIMIZATIONS
+   ========================================================================== */
+
+@media (max-width: 768px) {
+    /* Header & Navigation */
+    header {
+        flex-direction: column;
+        gap: 12px;
+        padding: 15px;
+        align-items: center;
+        text-align: center;
+    }
+    
+    .logo-container {
+        justify-content: center;
+    }
+
+    .main-navigation {
+        width: 100%;
+        display: flex;
+        overflow-x: auto;
+        padding-bottom: 8px;
+        justify-content: flex-start;
+        white-space: nowrap;
+        -webkit-overflow-scrolling: touch;
+        gap: 6px;
+    }
+
+    .nav-tab {
+        flex: 0 0 auto;
+        padding: 8px 14px;
+        font-size: 0.8rem;
+    }
+
+    .main-content {
+        padding: 12px;
+    }
+
+    /* Storefront & Filters */
+    .showcase-header {
+        text-align: center;
+        margin-bottom: 20px;
+    }
+    
+    .gradient-title {
+        font-size: 1.8rem;
+    }
+
+    .marketplace-filter-row {
+        overflow-x: auto;
+        white-space: nowrap;
+        padding-bottom: 10px;
+        margin-bottom: 15px;
+        -webkit-overflow-scrolling: touch;
+    }
+    
+    .filter-btn {
+        flex: 0 0 auto;
+    }
+
+    /* Checkout Modal Adjustments */
+    .stripe-checkout-modal {
+        width: 95% !important;
+        margin: 10px auto;
+        padding: 15px !important;
+        height: auto;
+        max-height: 95vh;
+    }
+    
+    .stripe-split-layout {
+        display: flex;
+        flex-direction: column;
+    }
+
+    /* Shopper Wallet Asset Pills */
+    .wallet-assets-scroller {
+        display: flex !important;
+        flex-direction: row !important;
+        overflow-x: auto !important;
+        gap: 8px;
+        padding-bottom: 8px;
+        -webkit-overflow-scrolling: touch;
+    }
+    
+    .wallet-asset-pill {
+        flex: 0 0 160px;
+        margin-bottom: 0 !important;
+    }
+
+    /* FDC Visualizer console logs & Nodes */
+    .pipeline-console {
+        font-size: 0.75rem !important;
+        word-break: break-all;
+        white-space: pre-wrap;
+    }
+
+    .validator-grid {
+        grid-template-columns: repeat(5, 1fr) !important;
+        gap: 5px !important;
+    }
+    
+    .validator-node {
+        font-size: 0.65rem !important;
+        padding: 4px 2px !important;
+        text-align: center;
+    }
+
+    .tree-visualizer-box {
+        transform: scale(0.85);
+        transform-origin: center;
+        margin: 0 auto;
+        width: 100%;
+        overflow: hidden;
+    }
+
+    /* Merchant Dashboard Grid */
+    .metrics-grid {
+        grid-template-columns: 1fr !important;
+        gap: 15px;
+    }
+
+    .holdings-grid {
+        grid-template-columns: 1fr !important;
+        gap: 6px;
+    }
+
+    .wrapping-form-box .form-inputs-row {
+        flex-direction: column;
+        gap: 8px;
+    }
+
+    .wrapping-form-box .form-inputs-row input,
+    .wrapping-form-box .form-inputs-row select {
+        width: 100% !important;
+    }
+
+    /* Seller Portal Split View */
+    .seller-portal-layout {
+        grid-template-columns: 1fr;
+        gap: 20px;
+    }
+
+    .seller-rating-summary {
+        flex-direction: column;
+        align-items: center;
+        text-align: center;
+        gap: 15px;
+    }
+
+    .stars-aggregate {
+        border-right: none;
+        border-bottom: 1px solid var(--border-color);
+        padding-right: 0;
+        padding-bottom: 15px;
+        width: 100%;
+    }
+}
+
+@media (max-width: 480px) {
+    /* Product showcase card footer sizes */
+    .card-pricing-footer {
+        flex-direction: column;
+        align-items: stretch !important;
+        gap: 12px;
+    }
+    
+    .card-pricing-footer .btn-glow {
+        width: 100%;
+        justify-content: center;
+    }
+}
