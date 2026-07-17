@@ -1598,13 +1598,12 @@ body {
 
 .code-copy-group code {
     font-family: monospace;
-    font-size: 0.76rem;
+    font-size: 0.72rem;
     color: var(--text-secondary);
     padding: 8px 10px;
     flex-grow: 1;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
+    word-break: break-all;
+    white-space: normal;
 }
 
 .btn-icon-copy {
@@ -2012,4 +2011,56 @@ body {
     font-style: italic;
     border: 1px dashed var(--border-color);
     border-radius: 8px;
+}
+
+.listing-actions {
+    display: flex;
+    gap: 8px;
+    margin-top: 12px;
+    padding-top: 12px;
+    border-top: 1px dashed var(--border-color);
+}
+
+.btn-edit-listing {
+    flex: 1;
+    background: rgba(59, 130, 246, 0.1);
+    border: 1px solid rgba(59, 130, 246, 0.2);
+    color: var(--color-blue);
+    padding: 6px 12px;
+    border-radius: 6px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    transition: all 0.2s ease;
+}
+
+.btn-edit-listing:hover {
+    background: rgba(59, 130, 246, 0.2);
+    color: #fff;
+}
+
+.btn-delete-listing {
+    flex: 1;
+    background: rgba(239, 68, 68, 0.1);
+    border: 1px solid rgba(239, 68, 68, 0.2);
+    color: var(--color-red);
+    padding: 6px 12px;
+    border-radius: 6px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    transition: all 0.2s ease;
+}
+
+.btn-delete-listing:hover {
+    background: rgba(239, 68, 68, 0.2);
+    color: #fff;
 }

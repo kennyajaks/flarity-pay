@@ -106,6 +106,15 @@ contract FlarityMerchantGateway {
         string comment
     );
 
+    event ListingUpdated(
+        uint256 indexed listingId,
+        string title,
+        uint256 priceUSD,
+        bool active
+    );
+
+    event ListingDeleted(uint256 indexed listingId);
+
     modifier onlyOwner() {
         require(msg.sender == owner, "Only owner can execute this");
         _;
@@ -191,6 +200,48 @@ contract FlarityMerchantGateway {
         });
         
         emit ListingCreated(listingId, msg.sender, _title, _priceUSD, _listingType);
+    }
+
+    /**
+     * @notice Edit an existing listing.
+     * @dev Restricts editing to the listing seller.
+     */
+    function editListing(
+        uint256 _listingId,
+        string calldata _title,
+        string calldata _description,
+        uint256 _priceUSD,
+        string calldata _imageUrl,
+        ListingType _listingType,
+        bool _active
+    ) external {
+        Listing storage listing = listings[_listingId];
+        require(listing.id != 0, "Listing does not exist");
+        require(msg.sender == listing.seller, "Only the listing seller can edit");
+        require(_priceUSD > 0, "Price must be positive");
+
+        listing.title = _title;
+        listing.description = _description;
+        listing.priceUSD = _priceUSD;
+        listing.imageUrl = _imageUrl;
+        listing.listingType = _listingType;
+        listing.active = _active;
+
+        emit ListingUpdated(_listingId, _title, _priceUSD, _active);
+    }
+
+    /**
+     * @notice Delete (deactivate) an existing listing.
+     * @dev Restricts deactivation to the listing seller.
+     */
+    function deleteListing(uint256 _listingId) external {
+        Listing storage listing = listings[_listingId];
+        require(listing.id != 0, "Listing does not exist");
+        require(msg.sender == listing.seller, "Only the listing seller can delete");
+
+        listing.active = false;
+
+        emit ListingDeleted(_listingId);
     }
 
     /**

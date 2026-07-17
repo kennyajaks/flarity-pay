@@ -492,12 +492,18 @@
                             <textarea id="list-description" rows="3" placeholder="Describe what you are offering..." required></textarea>
                         </div>
 
-                        <div class="form-group">
-                            <label for="list-image">Image Mock URL (Optional)</label>
-                            <input type="text" id="list-image" placeholder="Leave empty for auto-generated Web3 abstract art...">
+                        <div class="form-group-split">
+                            <div class="form-group">
+                                <label for="list-image">Image Mock URL (Optional)</label>
+                                <input type="text" id="list-image" placeholder="Leave empty for auto-generated Web3 art...">
+                            </div>
+                            <div class="form-group">
+                                <label for="list-image-file">Or Upload Image File</label>
+                                <input type="file" id="list-image-file" accept="image/*" style="padding: 9px 16px;">
+                            </div>
                         </div>
                         
-                        <button type="submit" class="btn btn-payment btn-block">
+                        <button type="submit" class="btn btn-payment btn-block" id="btn-submit-listing">
                             <i class="ri-checkbox-circle-line"></i> Register Listing On-Chain
                         </button>
                     </form>

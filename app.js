@@ -20,6 +20,8 @@ const FTSO_ABI = [
 // App Global State
 const state = {
     cart: [],
+    editListingId: null,
+    uploadedImageBase64: null,
     listings: [
         {
             id: 1,
@@ -415,6 +417,7 @@ function initMarketplaceFilter() {
 
 function renderMarketplaceListings() {
     const grid = document.getElementById("marketplace-listings-grid");
+    if (!grid) return;
     grid.innerHTML = "";
     
     const filtered = state.listings.filter(listing => {
@@ -457,6 +460,22 @@ function renderMarketplaceListings() {
         // Auto generated abstract background if no image is present
         const imgSrc = item.imageUrl || `https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?auto=format&fit=crop&w=600&q=80`;
 
+        // Check if the current user is the owner of the listing to display Edit/Delete buttons
+        const isOwner = (item.seller === state.selectedReviewSeller);
+        let actionsHTML = "";
+        if (isOwner) {
+            actionsHTML = `
+                <div class="listing-actions">
+                    <button class="btn-edit-listing" onclick="editListing(${item.id})">
+                        <i class="ri-edit-line"></i> Edit
+                    </button>
+                    <button class="btn-delete-listing" onclick="deleteListing(${item.id})">
+                        <i class="ri-delete-bin-line"></i> Delete
+                    </button>
+                </div>
+            `;
+        }
+
         card.innerHTML = `
             <div class="card-image-box">
                 <img src="${imgSrc}" alt="${item.title}">
@@ -475,6 +494,7 @@ function renderMarketplaceListings() {
                         <i class="ri-shopping-cart-2-line"></i> Add to Cart
                     </button>
                 </div>
+                ${actionsHTML}
             </div>
         `;
         grid.appendChild(card);
@@ -483,6 +503,26 @@ function renderMarketplaceListings() {
 
 function initListingForm() {
     const form = document.getElementById("form-list-item");
+    if (!form) return;
+
+    // Handle image file uploads and convert to Base64
+    const fileInput = document.getElementById("list-image-file");
+    if (fileInput) {
+        fileInput.addEventListener("change", (e) => {
+            const file = e.target.files[0];
+            if (!file) {
+                state.uploadedImageBase64 = null;
+                return;
+            }
+            const reader = new FileReader();
+            reader.onload = (event) => {
+                state.uploadedImageBase64 = event.target.result;
+                showBannerNotification("Image file uploaded and ready!");
+            };
+            reader.readAsDataURL(file);
+        });
+    }
+
     form.addEventListener("submit", (e) => {
         e.preventDefault();
         
@@ -490,41 +530,109 @@ function initListingForm() {
         const price = parseFloat(document.getElementById("list-price").value);
         const type = document.getElementById("list-type").value;
         const description = document.getElementById("list-description").value;
-        const imageUrl = document.getElementById("list-image").value;
+        const imageUrlInput = document.getElementById("list-image").value;
         
-        const newId = state.listings.length + 1;
-        const mockSellerAddress = "0x5336E1e04A1d5F69b86e057b7D05621cBcc645b0"; // Default deployer/merchant
+        const finalImageUrl = state.uploadedImageBase64 || imageUrlInput || null;
+        const currentSellerAddress = state.selectedReviewSeller; // List under active seller profile
         
-        const newListing = {
-            id: newId,
-            seller: mockSellerAddress,
-            title: title,
-            description: description,
-            priceUSD: price,
-            imageUrl: imageUrl || null,
-            type: type,
-            active: true
-        };
+        if (state.editListingId !== null && state.editListingId !== undefined) {
+            // EDIT MODE
+            const listing = state.listings.find(l => l.id === state.editListingId);
+            if (listing) {
+                listing.title = title;
+                listing.priceUSD = price;
+                listing.type = type;
+                listing.description = description;
+                listing.imageUrl = finalImageUrl;
+                
+                showBannerNotification(`Listing updated! Saved changes for item #${state.editListingId}`);
+            }
+            
+            // Reset Edit Mode
+            state.editListingId = null;
+            document.getElementById("btn-submit-listing").innerHTML = `<i class="ri-checkbox-circle-line"></i> Register Listing On-Chain`;
+        } else {
+            // CREATE MODE
+            const newId = state.listings.length + 1;
+            
+            const newListing = {
+                id: newId,
+                seller: currentSellerAddress,
+                title: title,
+                description: description,
+                priceUSD: price,
+                imageUrl: finalImageUrl,
+                type: type,
+                active: true
+            };
+            
+            state.listings.push(newListing);
+            showBannerNotification(`Listing registered! Created item #${newId}: ${title}`);
+        }
         
-        state.listings.push(newListing);
+        // Reset temp file uploader cache
+        state.uploadedImageBase64 = null;
         
         // Refresh grid
         renderMarketplaceListings();
         
         // Reset form
         form.reset();
-        showBannerNotification(`Listing on-chain success! Created item #${newId}: ${title}`);
     });
 }
+
+function editListing(id) {
+    const listing = state.listings.find(l => l.id === id);
+    if (!listing) return;
+    
+    state.editListingId = id;
+    
+    // Pre-fill form fields
+    document.getElementById("list-title").value = listing.title;
+    document.getElementById("list-price").value = listing.priceUSD;
+    document.getElementById("list-type").value = listing.type;
+    document.getElementById("list-description").value = listing.description;
+    
+    // Clear URL field if it's a Base64 image
+    const isBase64 = listing.imageUrl && listing.imageUrl.startsWith("data:");
+    document.getElementById("list-image").value = isBase64 ? "" : (listing.imageUrl || "");
+    
+    // Change submit button text
+    document.getElementById("btn-submit-listing").innerHTML = `<i class="ri-save-line"></i> Save On-Chain Edits`;
+    
+    // Transition tab to Seller Portal
+    const sellerTab = document.querySelector('.nav-tab[data-target="seller-tab"]');
+    if (sellerTab) sellerTab.click();
+    
+    // Focus title field
+    document.getElementById("list-title").focus();
+    showBannerNotification(`Editing listing #${id}: ${listing.title}`);
+}
+
+function deleteListing(id) {
+    const listing = state.listings.find(l => l.id === id);
+    if (!listing) return;
+    
+    listing.active = false;
+    renderMarketplaceListings();
+    showBannerNotification(`Deleted listing #${id}: ${listing.title} successfully.`);
+}
+
+// Bind to window for HTML inline events
+window.editListing = editListing;
+window.deleteListing = deleteListing;
 
 // ================= REVIEWS & FLARITY STARS LOGIC =================
 
 function initReviewsSystem() {
     const sellerSelector = document.getElementById("select-seller");
-    sellerSelector.addEventListener("change", (e) => {
-        state.selectedReviewSeller = e.target.value;
-        renderReviews();
-    });
+    if (sellerSelector) {
+        sellerSelector.addEventListener("change", (e) => {
+            state.selectedReviewSeller = e.target.value;
+            renderReviews();
+            renderMarketplaceListings();
+        });
+    }
 
     // Rating star clicks
     const starsContainer = document.getElementById("rating-stars-interactive");

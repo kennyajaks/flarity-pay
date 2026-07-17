@@ -244,4 +244,85 @@ contract FlarityMerchantGatewayTest is Test {
         vm.expectRevert("Only verified buyers can review");
         gateway.submitReview(sellerAddress, 4, "Trying to submit fake review.");
     }
+
+    function testEditListing() public {
+        vm.prank(sellerAddress);
+        uint256 listingId = gateway.listItem(
+            "Original Title",
+            "Original Description",
+            100 * 1e18,
+            "http://orig.jpg",
+            FlarityMerchantGateway.ListingType.Product
+        );
+
+        // Edit listing as the seller
+        vm.prank(sellerAddress);
+        gateway.editListing(
+            listingId,
+            "Edited Title",
+            "Edited Description",
+            150 * 1e18,
+            "http://edited.jpg",
+            FlarityMerchantGateway.ListingType.Service,
+            true
+        );
+
+        // Check values
+        (
+            ,
+            ,
+            string memory title,
+            string memory description,
+            uint256 priceUSD,
+            string memory imageUrl,
+            FlarityMerchantGateway.ListingType listingType,
+            bool active
+        ) = gateway.listings(listingId);
+
+        assertEq(title, "Edited Title");
+        assertEq(description, "Edited Description");
+        assertEq(priceUSD, 150 * 1e18);
+        assertEq(imageUrl, "http://edited.jpg");
+        assertTrue(listingType == FlarityMerchantGateway.ListingType.Service);
+        assertTrue(active);
+
+        // Expect revert when non-seller tries to edit
+        address hacker = address(0x666);
+        vm.prank(hacker);
+        vm.expectRevert("Only the listing seller can edit");
+        gateway.editListing(
+            listingId,
+            "Hacked Title",
+            "Hacked Description",
+            50 * 1e18,
+            "http://hacked.jpg",
+            FlarityMerchantGateway.ListingType.Product,
+            true
+        );
+    }
+
+    function testDeleteListing() public {
+        vm.prank(sellerAddress);
+        uint256 listingId = gateway.listItem(
+            "To Delete",
+            "Soon to go",
+            100 * 1e18,
+            "http://del.jpg",
+            FlarityMerchantGateway.ListingType.Product
+        );
+
+        // Delete listing as the seller
+        vm.prank(sellerAddress);
+        gateway.deleteListing(listingId);
+
+        // Check active status
+        (, , , , , , , bool active) = gateway.listings(listingId);
+        assertFalse(active);
+
+        // Expect revert when non-seller tries to delete
+        address hacker = address(0x666);
+        vm.prank(hacker);
+        vm.expectRevert("Only the listing seller can delete");
+        gateway.deleteListing(listingId);
+    }
 }
