@@ -3,6 +3,7 @@
 // Coston2 RPC configuration
 const COSTON2_RPC = "https://coston2-api.flare.network/ext/C/rpc";
 const FTSO_V2_ADDRESS = "0x7BDE3Df0624114eDB3A67dFe6753e62f4e7c1d20";
+const GATEWAY_CONTRACT_ADDRESS = "0x8F770E64B2c60F36d125f61A64BCfa81cb0F31Fa";
 
 // FTSOv2 Feed IDs (21-bytes hex)
 const FEED_IDS = {
@@ -17,11 +18,29 @@ const FTSO_ABI = [
     "function getFeedById(bytes21 _feedId) external view returns (uint256 value, int8 decimals, uint64 timestamp)"
 ];
 
+// Simplified ABI for FlarityMerchantGateway contract
+const GATEWAY_ABI = [
+    "function listItem(string calldata _title, string calldata _description, uint256 _priceUSD, string calldata _imageUrl, uint8 _listingType) external returns (uint256)",
+    "function editListing(uint256 _listingId, string calldata _title, string calldata _description, uint256 _priceUSD, string calldata _imageUrl, uint8 _listingType, bool _active) external",
+    "function deleteListing(uint256 _listingId) external",
+    "function createInvoice(uint256 _listingId, string calldata _currency, bytes32 _paymentReference) external returns (uint256)",
+    "function submitReview(address _seller, uint8 _rating, string calldata _comment) external",
+    "function getReviewsCount(address _seller) external view returns (uint256)",
+    "function getSellerReviews(address _seller) external view returns (tuple(uint256 id, address seller, address buyer, uint8 rating, string comment, uint256 timestamp)[])",
+    "function listings(uint256) external view returns (uint256 id, address seller, string title, string description, uint256 priceUSD, string imageUrl, uint8 listingType, bool active)",
+    "function invoices(uint256) external view returns (uint256 id, address buyer, address seller, uint256 amountUSD, bytes32 paymentReference, string currency, uint256 amountCrypto, bool settled)",
+    "function listingCount() external view returns (uint256)",
+    "function invoiceCount() external view returns (uint256)"
+];
+
 // App Global State
 const state = {
     cart: [],
     editListingId: null,
     uploadedImageBase64: null,
+    userAddress: null,
+    userConnected: false,
+    gatewayContract: null,
     listings: [
         {
             id: 1,
@@ -138,6 +157,12 @@ document.addEventListener("DOMContentLoaded", () => {
     renderMarketplaceListings();
     renderReviews();
 
+    // Connect wallet listener
+    const connectBtn = document.getElementById("btn-connect-wallet");
+    if (connectBtn) {
+        connectBtn.addEventListener("click", connectWallet);
+    }
+
     // Periodically update network status and block numbers
     setInterval(updateNetworkData, 3000);
 });
@@ -187,6 +212,117 @@ async function initWeb3() {
         blockEl.textContent = state.costonBlockHeight.toLocaleString();
         
         simulatePrices();
+    }
+}
+
+// Connect to MetaMask or switch to Coston2
+async function connectWallet() {
+    if (typeof window.ethereum === "undefined") {
+        showBannerNotification("MetaMask is not installed. Please install it to connect on-chain.");
+        return;
+    }
+    
+    const connectBtn = document.getElementById("btn-connect-wallet");
+    connectBtn.disabled = true;
+    connectBtn.textContent = "Connecting...";
+
+    try {
+        const accounts = await window.ethereum.request({ method: "eth_requestAccounts" });
+        state.userAddress = accounts[0];
+        state.userConnected = true;
+        
+        const browserProvider = new ethers.providers.Web3Provider(window.ethereum);
+        const signer = browserProvider.getSigner();
+        
+        const network = await browserProvider.getNetwork();
+        if (network.chainId !== 114) {
+            try {
+                await window.ethereum.request({
+                    method: "wallet_switchEthereumChain",
+                    params: [{ chainId: "0x72" }] // Chain ID 114 in hex
+                });
+            } catch (switchError) {
+                if (switchError.code === 4902) {
+                    await window.ethereum.request({
+                        method: "wallet_addEthereumChain",
+                        params: [{
+                            chainId: "0x72",
+                            chainName: "Flare Testnet Coston2",
+                            rpcUrls: ["https://coston2-api.flare.network/ext/C/rpc"],
+                            nativeCurrency: { name: "Coston2 Flare", symbol: "C2FLR", decimals: 18 },
+                            blockExplorerUrls: ["https://coston2-explorer.flare.network/"]
+                        }]
+                    });
+                }
+            }
+        }
+        
+        state.gatewayContract = new ethers.Contract(GATEWAY_CONTRACT_ADDRESS, GATEWAY_ABI, signer);
+        
+        connectBtn.textContent = `${state.userAddress.substring(0, 6)}...${state.userAddress.substring(38)}`;
+        connectBtn.className = "btn btn-sm btn-glow text-green";
+        connectBtn.disabled = false;
+        
+        showBannerNotification("MetaMask connected successfully on Coston2!");
+        updateSellerSelectOptions();
+        await fetchListingsFromContract();
+        
+    } catch (err) {
+        console.error("MetaMask connection failed:", err);
+        connectBtn.textContent = "Connect Wallet";
+        connectBtn.disabled = false;
+        showBannerNotification("Wallet connection failed.");
+    }
+}
+
+function updateSellerSelectOptions() {
+    const select = document.getElementById("select-seller");
+    if (!select || !state.userAddress) return;
+    
+    const options = Array.from(select.options);
+    const exists = options.some(opt => opt.value.toLowerCase() === state.userAddress.toLowerCase());
+    
+    if (!exists) {
+        const opt = document.createElement("option");
+        opt.value = state.userAddress;
+        opt.textContent = `Connected Account (${state.userAddress.substring(0, 6)}...${state.userAddress.substring(38)})`;
+        select.appendChild(opt);
+        select.value = state.userAddress;
+        state.selectedReviewSeller = state.userAddress;
+        
+        renderMarketplaceListings();
+        renderReviews();
+    }
+}
+
+async function fetchListingsFromContract() {
+    if (!state.gatewayContract) return;
+    try {
+        const totalListings = await state.gatewayContract.listingCount();
+        const listingsArray = [];
+        
+        for (let i = 1; i <= totalListings; i++) {
+            const data = await state.gatewayContract.listings(i);
+            if (data.active) {
+                listingsArray.push({
+                    id: data.id.toNumber(),
+                    seller: data.seller,
+                    title: data.title,
+                    description: data.description,
+                    priceUSD: parseFloat(ethers.utils.formatEther(data.priceUSD)),
+                    imageUrl: data.imageUrl,
+                    type: data.listingType === 0 ? "Product" : "Service",
+                    active: data.active
+                });
+            }
+        }
+        
+        if (listingsArray.length > 0) {
+            state.listings = listingsArray;
+            renderMarketplaceListings();
+        }
+    } catch (e) {
+        console.error("Error fetching listings from contract:", e);
     }
 }
 
@@ -523,7 +659,7 @@ function initListingForm() {
         });
     }
 
-    form.addEventListener("submit", (e) => {
+    form.addEventListener("submit", async (e) => {
         e.preventDefault();
         
         const title = document.getElementById("list-title").value;
@@ -532,52 +668,92 @@ function initListingForm() {
         const description = document.getElementById("list-description").value;
         const imageUrlInput = document.getElementById("list-image").value;
         
-        const finalImageUrl = state.uploadedImageBase64 || imageUrlInput || null;
+        const finalImageUrl = state.uploadedImageBase64 || imageUrlInput || "";
         const currentSellerAddress = state.selectedReviewSeller; // List under active seller profile
         
-        if (state.editListingId !== null && state.editListingId !== undefined) {
-            // EDIT MODE
-            const listing = state.listings.find(l => l.id === state.editListingId);
-            if (listing) {
-                listing.title = title;
-                listing.priceUSD = price;
-                listing.type = type;
-                listing.description = description;
-                listing.imageUrl = finalImageUrl;
+        const typeUint = (type === "Product") ? 0 : 1;
+        const priceWei = ethers.utils.parseEther(price.toString());
+
+        if (state.userConnected && state.gatewayContract) {
+            try {
+                showBannerNotification("Confirming listing transaction in your MetaMask wallet...");
+                const submitBtn = document.getElementById("btn-submit-listing");
+                submitBtn.disabled = true;
+                submitBtn.textContent = "Broadcasting...";
+
+                let tx;
+                if (state.editListingId !== null && state.editListingId !== undefined) {
+                    tx = await state.gatewayContract.editListing(
+                        state.editListingId,
+                        title,
+                        description,
+                        priceWei,
+                        finalImageUrl,
+                        typeUint,
+                        true
+                    );
+                } else {
+                    tx = await state.gatewayContract.listItem(
+                        title,
+                        description,
+                        priceWei,
+                        finalImageUrl,
+                        typeUint
+                    );
+                }
                 
-                showBannerNotification(`Listing updated! Saved changes for item #${state.editListingId}`);
+                showBannerNotification("Transaction broadcasted! Waiting for block confirmation...");
+                await tx.wait();
+                showBannerNotification("On-chain action confirmed!");
+                
+                state.editListingId = null;
+                submitBtn.innerHTML = `<i class="ri-checkbox-circle-line"></i> Register Listing On-Chain`;
+                submitBtn.disabled = false;
+                
+                // Refresh list from contract
+                await fetchListingsFromContract();
+                form.reset();
+                state.uploadedImageBase64 = null;
+            } catch (err) {
+                console.error("On-chain transaction failed:", err);
+                showBannerNotification("Transaction failed or rejected by user.");
+                document.getElementById("btn-submit-listing").disabled = false;
             }
-            
-            // Reset Edit Mode
-            state.editListingId = null;
-            document.getElementById("btn-submit-listing").innerHTML = `<i class="ri-checkbox-circle-line"></i> Register Listing On-Chain`;
         } else {
-            // CREATE MODE
-            const newId = state.listings.length + 1;
-            
-            const newListing = {
-                id: newId,
-                seller: currentSellerAddress,
-                title: title,
-                description: description,
-                priceUSD: price,
-                imageUrl: finalImageUrl,
-                type: type,
-                active: true
-            };
-            
-            state.listings.push(newListing);
-            showBannerNotification(`Listing registered! Created item #${newId}: ${title}`);
+            // Local fallback simulation
+            if (state.editListingId !== null && state.editListingId !== undefined) {
+                // EDIT MODE
+                const listing = state.listings.find(l => l.id === state.editListingId);
+                if (listing) {
+                    listing.title = title;
+                    listing.priceUSD = price;
+                    listing.type = type;
+                    listing.description = description;
+                    listing.imageUrl = finalImageUrl || null;
+                    showBannerNotification(`Listing updated! Saved changes for item #${state.editListingId}`);
+                }
+                state.editListingId = null;
+                document.getElementById("btn-submit-listing").innerHTML = `<i class="ri-checkbox-circle-line"></i> Register Listing On-Chain`;
+            } else {
+                // CREATE MODE
+                const newId = state.listings.length + 1;
+                const newListing = {
+                    id: newId,
+                    seller: currentSellerAddress,
+                    title: title,
+                    description: description,
+                    priceUSD: price,
+                    imageUrl: finalImageUrl || null,
+                    type: type,
+                    active: true
+                };
+                state.listings.push(newListing);
+                showBannerNotification(`Listing registered! Created item #${newId}: ${title}`);
+            }
+            state.uploadedImageBase64 = null;
+            renderMarketplaceListings();
+            form.reset();
         }
-        
-        // Reset temp file uploader cache
-        state.uploadedImageBase64 = null;
-        
-        // Refresh grid
-        renderMarketplaceListings();
-        
-        // Reset form
-        form.reset();
     });
 }
 
@@ -609,13 +785,26 @@ function editListing(id) {
     showBannerNotification(`Editing listing #${id}: ${listing.title}`);
 }
 
-function deleteListing(id) {
-    const listing = state.listings.find(l => l.id === id);
-    if (!listing) return;
-    
-    listing.active = false;
-    renderMarketplaceListings();
-    showBannerNotification(`Deleted listing #${id}: ${listing.title} successfully.`);
+async function deleteListing(id) {
+    if (state.userConnected && state.gatewayContract) {
+        try {
+            showBannerNotification("Confirm listing deletion in MetaMask wallet...");
+            const tx = await state.gatewayContract.deleteListing(id);
+            showBannerNotification("Broadcasting delete transaction on-chain...");
+            await tx.wait();
+            showBannerNotification("Listing deleted from Coston2 registry!");
+            await fetchListingsFromContract();
+        } catch (e) {
+            console.error("Listing deletion failed:", e);
+            showBannerNotification("Failed to delete listing on-chain.");
+        }
+    } else {
+        const listing = state.listings.find(l => l.id === id);
+        if (!listing) return;
+        listing.active = false;
+        renderMarketplaceListings();
+        showBannerNotification(`Deleted listing #${id}: ${listing.title} successfully.`);
+    }
 }
 
 // Bind to window for HTML inline events
@@ -627,9 +816,13 @@ window.deleteListing = deleteListing;
 function initReviewsSystem() {
     const sellerSelector = document.getElementById("select-seller");
     if (sellerSelector) {
-        sellerSelector.addEventListener("change", (e) => {
+        sellerSelector.addEventListener("change", async (e) => {
             state.selectedReviewSeller = e.target.value;
-            renderReviews();
+            if (state.userConnected) {
+                await fetchReviewsFromContract(state.selectedReviewSeller);
+            } else {
+                renderReviews();
+            }
             renderMarketplaceListings();
         });
     }
@@ -659,44 +852,97 @@ function initReviewsSystem() {
 
     // Submit review form
     const form = document.getElementById("form-submit-review");
-    form.addEventListener("submit", (e) => {
+    form.addEventListener("submit", async (e) => {
         e.preventDefault();
         
         const comment = document.getElementById("review-comment").value;
         const seller = state.selectedReviewSeller;
         
-        // Verified purchase check
-        const relationKey = `shopperAddress_${seller}`;
-        if (!state.verifiedPurchases[relationKey]) {
-            showBannerNotification("Access Denied: Only verified buyers can submit comments for this seller.");
-            return;
+        if (state.userConnected && state.gatewayContract) {
+            try {
+                showBannerNotification("Submitting review transaction to MetaMask... please confirm.");
+                const submitBtn = document.getElementById("btn-submit-review");
+                submitBtn.disabled = true;
+                submitBtn.textContent = "Submitting...";
+
+                const tx = await state.gatewayContract.submitReview(
+                    seller,
+                    state.interactiveRating,
+                    comment
+                );
+                
+                showBannerNotification("Broadcasting review transaction on-chain...");
+                await tx.wait();
+                showBannerNotification("Review submitted successfully on Coston2!");
+                
+                submitBtn.disabled = false;
+                submitBtn.textContent = "Submit Verified Review";
+                
+                // Fetch updated reviews
+                await fetchReviewsFromContract(seller);
+                form.reset();
+                
+            } catch (err) {
+                console.error("Failed to submit review on-chain:", err);
+                showBannerNotification("Failed to submit review. Ensure you are a verified buyer (completed checkout with this seller).");
+                document.getElementById("btn-submit-review").disabled = false;
+                document.getElementById("btn-submit-review").textContent = "Submit Verified Review";
+            }
+        } else {
+            // Local fallback simulation
+            const relationKey = `shopperAddress_${seller}`;
+            if (!state.verifiedPurchases[relationKey]) {
+                showBannerNotification("Access Denied: Only verified buyers can submit comments for this seller.");
+                return;
+            }
+
+            if (!state.reviews[seller]) {
+                state.reviews[seller] = [];
+            }
+
+            state.reviews[seller].unshift({
+                buyer: "0xShopperAddress...",
+                rating: state.interactiveRating,
+                comment: comment,
+                timestamp: "just now"
+            });
+
+            renderReviews();
+            form.reset();
+            
+            // Reset interactive stars
+            state.interactiveRating = 5;
+            const stars = starsContainer.querySelectorAll(".star-interactive");
+            stars.forEach(s => s.innerHTML = `<i class="ri-star-fill"></i>`);
+            document.getElementById("selected-stars-text").textContent = "5 Flarity Stars";
+            
+            renderMarketplaceListings();
+            showBannerNotification("Review submitted successfully!");
         }
-
-        if (!state.reviews[seller]) {
-            state.reviews[seller] = [];
-        }
-
-        state.reviews[seller].unshift({
-            buyer: "0xShopperAddress...",
-            rating: state.interactiveRating,
-            comment: comment,
-            timestamp: "just now"
-        });
-
-        renderReviews();
-        form.reset();
-        
-        // Reset interactive stars
-        state.interactiveRating = 5;
-        const stars = starsContainer.querySelectorAll(".star-interactive");
-        stars.forEach(s => s.innerHTML = `<i class="ri-star-fill"></i>`);
-        document.getElementById("selected-stars-text").textContent = "5 Flarity Stars";
-        
-        // Recalculate listing averages
-        renderMarketplaceListings();
-
-        showBannerNotification("Review submitted successfully on-chain!");
     });
+}
+
+async function fetchReviewsFromContract(seller) {
+    if (!state.gatewayContract) return;
+    try {
+        const reviewsData = await state.gatewayContract.getSellerReviews(seller);
+        const reviewsArray = [];
+        
+        for (let i = 0; i < reviewsData.length; i++) {
+            const r = reviewsData[i];
+            reviewsArray.push({
+                buyer: `${r.buyer.substring(0, 6)}...${r.buyer.substring(38)}`,
+                rating: r.rating,
+                comment: r.comment,
+                timestamp: new Date(r.timestamp.toNumber() * 1000).toLocaleDateString()
+            });
+        }
+        
+        state.reviews[seller] = reviewsArray;
+        renderReviews();
+    } catch (e) {
+        console.error("Error fetching reviews from contract:", e);
+    }
 }
 
 function renderReviews() {
@@ -775,8 +1021,10 @@ function openCheckoutModal() {
     
     // Track target seller for this checkout. For a multi-item cart, we choose the seller of the first item
     const targetSeller = state.cart.length > 0 ? state.cart[0].seller : "0x5336E1e04A1d5F69b86e057b7D05621cBcc645b0";
+    const firstListingId = state.cart.length > 0 ? state.cart[0].id : 1;
 
     state.activeInvoice = {
+        listingId: firstListingId,
         usdTotal: totalUSD,
         items: itemList,
         payRef: payRef,
@@ -830,10 +1078,38 @@ function updateModalCalculations() {
     state.activeInvoice.destAddr = destAddr;
 }
 
-function routeToWalletPayment() {
+async function routeToWalletPayment() {
     if (!state.activeInvoice) return;
     
     const invoice = state.activeInvoice;
+
+    if (state.userConnected && state.gatewayContract) {
+        try {
+            showBannerNotification("Registering invoice on-chain on Coston2 Testnet. Confirm wallet prompt...");
+            const payBtn = document.getElementById("btn-modal-pay-simulate");
+            payBtn.disabled = true;
+            payBtn.textContent = "Registering on-chain...";
+
+            const tx = await state.gatewayContract.createInvoice(
+                invoice.listingId,
+                invoice.currency,
+                invoice.payRef
+            );
+            
+            showBannerNotification("Broadcasting invoice transaction... waiting for confirmations.");
+            await tx.wait();
+            showBannerNotification("On-chain invoice registered successfully!");
+            
+            payBtn.disabled = false;
+            payBtn.innerHTML = `<i class="ri-arrow-right-up-line"></i> Open Wallet & Pay Invoice`;
+        } catch (err) {
+            console.error("On-chain invoice registration failed:", err);
+            showBannerNotification("On-chain invoice registration failed. Falling back to simulated flow.");
+            const payBtn = document.getElementById("btn-modal-pay-simulate");
+            payBtn.disabled = false;
+            payBtn.innerHTML = `<i class="ri-arrow-right-up-line"></i> Open Wallet & Pay Invoice`;
+        }
+    }
     
     document.getElementById("wallet-dest-addr").textContent = invoice.destAddr;
     document.getElementById("wallet-pay-ref").textContent = invoice.payRef;
@@ -855,10 +1131,10 @@ function routeToWalletPayment() {
     closeCheckoutModal();
     
     const visualizerTabBtn = document.getElementById("nav-visualizer-btn");
-    visualizerTabBtn.click();
+    if (visualizerTabBtn) visualizerTabBtn.click();
     
     const badge = document.getElementById("pending-tx-badge");
-    badge.style.display = "inline-block";
+    if (badge) badge.style.display = "inline-block";
     
     showBannerNotification("Checkout details loaded to shopper wallet terminal. Ready to broadcast cross-chain payment.");
 }
