@@ -219,7 +219,7 @@ async function initWeb3() {
 async function connectWallet() {
     if (typeof window.ethereum === "undefined") {
         showBannerNotification("MetaMask is not installed. Please install it to connect on-chain.");
-        return;
+        return false;
     }
     
     const connectBtn = document.getElementById("btn-connect-wallet");
@@ -266,12 +266,14 @@ async function connectWallet() {
         showBannerNotification("MetaMask connected successfully on Coston2!");
         updateSellerSelectOptions();
         await fetchListingsFromContract();
+        return true;
         
     } catch (err) {
         console.error("MetaMask connection failed:", err);
         connectBtn.textContent = "Connect Wallet";
         connectBtn.disabled = false;
         showBannerNotification("Wallet connection failed.");
+        return false;
     }
 }
 
@@ -662,6 +664,13 @@ function initListingForm() {
     form.addEventListener("submit", async (e) => {
         e.preventDefault();
         
+        if (!state.userConnected) {
+            const connected = await connectWallet();
+            if (!connected) {
+                showBannerNotification("MetaMask connection rejected. Operating in simulated fallback mode.");
+            }
+        }
+        
         const title = document.getElementById("list-title").value;
         const price = parseFloat(document.getElementById("list-price").value);
         const type = document.getElementById("list-type").value;
@@ -786,6 +795,13 @@ function editListing(id) {
 }
 
 async function deleteListing(id) {
+    if (!state.userConnected) {
+        const connected = await connectWallet();
+        if (!connected) {
+            showBannerNotification("MetaMask connection rejected. Operating in simulated fallback mode.");
+        }
+    }
+    
     if (state.userConnected && state.gatewayContract) {
         try {
             showBannerNotification("Confirm listing deletion in MetaMask wallet...");
@@ -858,6 +874,13 @@ function initReviewsSystem() {
         const comment = document.getElementById("review-comment").value;
         const seller = state.selectedReviewSeller;
         
+        if (!state.userConnected) {
+            const connected = await connectWallet();
+            if (!connected) {
+                showBannerNotification("MetaMask connection rejected. Operating in simulated fallback mode.");
+            }
+        }
+
         if (state.userConnected && state.gatewayContract) {
             try {
                 showBannerNotification("Submitting review transaction to MetaMask... please confirm.");
@@ -1082,6 +1105,13 @@ async function routeToWalletPayment() {
     if (!state.activeInvoice) return;
     
     const invoice = state.activeInvoice;
+
+    if (!state.userConnected) {
+        const connected = await connectWallet();
+        if (!connected) {
+            showBannerNotification("MetaMask connection rejected. Operating in simulated fallback mode.");
+        }
+    }
 
     if (state.userConnected && state.gatewayContract) {
         try {
